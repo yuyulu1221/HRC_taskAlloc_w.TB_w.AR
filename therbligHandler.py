@@ -118,33 +118,33 @@ class Therblig(object):
 #         self.Obj2 = Obj2
 
 #%% 動素序列(Linked-List)
-class TherbligLinkedList(object):
-    def __init__(self):
-        self.head = None
+# class TherbligLinkedList(object):
+#     def __init__(self):
+#         self.head = None
         
-    def __str__(self):
-        ptr = self.head
-        if ptr == None:
-            return "Empty"
-        ret = ptr.type
-        ptr = ptr.next
-        while ptr != None:
-            ret = ret + ", " + ptr.type
-            ptr = ptr.next
-        return ret
+#     def __str__(self):
+#         ptr = self.head
+#         if ptr == None:
+#             return "Empty"
+#         ret = ptr.type
+#         ptr = ptr.next
+#         while ptr != None:
+#             ret = ret + ", " + ptr.type
+#             ptr = ptr.next
+#         return ret
         
-    def set_head(self, tb):
-        self.head = tb
+#     def set_head(self, tb):
+#         self.head = tb
         
-    def read(self, df:pd.DataFrame):
-        for idx, row in df.iterrows():
-            therblig = Therblig(row["Type"], Pos[row["From"]], Pos[row["To"]], row["Obj1"], row["Obj2"])
-            if self.head == None:
-                self.head = copy.copy(therblig)
-                self.ptr = self.head
-            else:
-                self.ptr.next = copy.copy(therblig)
-                self.ptr = self.ptr.next
+#     def read(self, df:pd.DataFrame):
+#         for idx, row in df.iterrows():
+#             therblig = Therblig(row["Type"], Pos[row["From"]], Pos[row["To"]], row["Obj1"], row["Obj2"])
+#             if self.head == None:
+#                 self.head = copy.copy(therblig)
+#                 self.ptr = self.head
+#             else:
+#                 self.ptr.next = copy.copy(therblig)
+#                 self.ptr = self.ptr.next
 #%% 動素序列
 class Therbligs(object):
     def __init__(self, Pos):
@@ -180,14 +180,13 @@ class OHT(object):
     def read(self, tbs:Therbligs):
         tmp = []
         for tb in tbs.list:
-            
+            if len(tmp) != 0:
+                if tmp[-1] == "A" or tmp[-1].type == "DA" and tb.type != "RL":
+                    raise ValueError("Invalid therblig list")  
+            tmp.append(tb)
             if tb.type == "RL":
-                tmp.append(tb)
                 self.list.append(tmp.copy())
                 tmp.clear()
-            elif tmp.count != 0 \
-            and (tmp[-1].type == "A" or tmp[-1].type == "DA"):
-                raise ValueError("Invalid therblig list")
                 
             # if tmp.count != 0 \
             # and (tmp[-1].type == "A" or tmp[-1].type == "DA") \
@@ -200,6 +199,8 @@ class OHT(object):
 class TBHandler(object):
     def __init__(self):
         self.Pos = {}
+        self.tbsl:Therbligs
+        self.tbsr:Therbligs
         self.OHT:OHT
 
     def save_pos(self):
@@ -207,20 +208,25 @@ class TBHandler(object):
         for idx, pos in pos_df.iterrows():
             self.Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
     
-    def gen_OHT(self):
-        tbsl = Therbligs(self.Pos)
+    def save_tbs(self):
+        self.tbsl = Therbligs(self.Pos)
         tbsl_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(L)")   
-        tbsl.read(tbsl_df)
+        self.tbsl.read(tbsl_df)
         
-        tbsr = Therbligs(self.Pos)
+        self.tbsr = Therbligs(self.Pos)
         tbsr_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(R)")   
-        tbsr.read(tbsr_df)
+        self.tbsr.read(tbsr_df)
+    
+    def save_constraint(self):
         
-        self.OHT = OHT(tbsl, tbsr)
+    
+    def gen_OHT(self):
+        self.OHT = OHT(self.tbsl, self.tbsr)
         # print(self.OHT)
             
     def run(self):
         self.save_pos()
+        self.save_tbs()
         self.gen_OHT()
         print(self.OHT)
 
