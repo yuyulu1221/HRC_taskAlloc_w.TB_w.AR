@@ -191,9 +191,7 @@ class OHT(object):
             # if tmp.count != 0 \
             # and (tmp[-1].type == "A" or tmp[-1].type == "DA") \
             # and tb.type != "RL":
-            #     tmp.append(Therblig(Type="RL", Obj1=tmp[-2].Obj1))
-                 
-    
+            #     tmp.append(Therblig(Type="RL", Obj1=tmp[-2].Obj1))  
     
 #%% TBHandler
 class TBHandler(object):
@@ -202,36 +200,37 @@ class TBHandler(object):
         self.tbsl:Therbligs
         self.tbsr:Therbligs
         self.OHT:OHT
+        self.run()
 
     def save_pos(self):
-        pos_df = pd.read_excel("data.xlsx", sheet_name="Position")
+        pos_df = pd.read_excel("data1.xlsx", sheet_name="Position")
         for idx, pos in pos_df.iterrows():
             self.Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
     
     def save_tbs(self):
         self.tbsl = Therbligs(self.Pos)
-        tbsl_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(L)")   
+        tbsl_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(L)")   
         self.tbsl.read(tbsl_df)
         
         self.tbsr = Therbligs(self.Pos)
-        tbsr_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(R)")   
+        tbsr_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(R)")   
         self.tbsr.read(tbsr_df)
     
-    def save_constraint(self):
-        
-    
-    def gen_OHT(self):
+    def create_OHT(self):
         self.OHT = OHT(self.tbsl, self.tbsr)
         # print(self.OHT)
+        
+    def get_OHT(self):
+        return self.OHT
             
     def run(self):
         self.save_pos()
         self.save_tbs()
-        self.gen_OHT()
+        self.create_OHT()
         print(self.OHT)
 
 
 
 #%% Main
-myTBHandler = TBHandler()
-myTBHandler.run()
+# myTBHandler = TBHandler()
+# myTBHandler.run()
