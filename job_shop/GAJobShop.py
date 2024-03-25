@@ -176,7 +176,9 @@ for n in range(num_iteration):
     
     bar_cnt = (int(((n+1)/num_iteration)*20))
     space_cnt = 20 - bar_cnt
-    print("\rProgress: [" + "█"*bar_cnt + " "*space_cnt + f"] {((n+1)/num_iteration):.2%} {n+1}/{num_iteration} T-best = {Tbest}", end="")
+    bar = "▇"*bar_cnt + " "*space_cnt
+    
+    print(f"\rProgress: [{bar}] {((n+1)/num_iteration):.2%} {n+1}/{num_iteration} T-best = {Tbest}", end="")
         
     makespan_record.append(Tbest)
 '''----------result----------'''

@@ -1,4 +1,5 @@
 #%% importing required modules
+from cv2 import fitEllipse
 import pandas as pd
 import numpy as np
 import time
@@ -24,56 +25,81 @@ class GASolver(object):
 
 		# Raw input
 		self.pop_size=int(input('Please input the size of population: ') or 30) # default value is 30
+		self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5)
 		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default value is 0.8
 		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default value is 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
-		self.num_mutation_jobs=round(self.num_gene*mutation_selection_rate)
+		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
 		self.num_iter=int(input('Please input number of iteration: ') or 100) # default value is 2000
 			
-		self.pop_list = np.zeros((self.pop_size, self.num_gene))
-		self.pop_fit = np.zeros(self.pop_size)
+		self.pop_list = []
+		self.pop_fit = []
    
 		self.makespan_rec = []
 		self.start_time = time.time()
-  
-	def init_pop(self) -> None:
-		self.Tbest=999999999999999
-		self.best_list, self.best_obj=[],[]
-		for i in range(self.pop_size):
-			nxm_random_num=list(np.random.permutation(self.num_gene)) # generate a random permutation of 0 to num_job*num_mc-1
-			self.pop_list.append(nxm_random_num) # add to the population_list
-			for j in range(self.num_gene):
-				self.pop_list[i][j] = self.pop_list[i][j] % self.num_job # convert to job number format, every job appears m times
     
 	def run(self):
 		self.init_pop()
-		for n in range(self.num_iter):
-			self.Tbest_now = 99999999999
+		for it in range(self.num_iter):
+			self.Tbest_now = 999999999
 			parent = self.selection()
 			offspring = self.twoPtCrossover(parent) # with mutation
-			offspring = self.repairment(offspring)
-			self.fit()
-			self.replacement()
-			self.gantt_chart()
+			offspring, fit = self.repairment(offspring)
+			self.replacement(offspring, fit)
+			self.progress_bar(it)
+		self.gantt_chart()
+   
+	def init_pop(self) -> None:
+		self.Tbest = 999999999
+		for i in range(self.pop_size):
+			nxm_random_num = list(np.random.permutation(self.num_gene)) # generate a random permutation of 0 to num_job*num_mc-1
+			self.pop_list.append(nxm_random_num) # add to the population_list
+			for j in range(self.num_gene):
+				self.pop_list[i][j] = self.pop_list[i][j] % self.num_job # convert to job number format, every job appears m times
+			self.pop_fit.append(self.cal_fit(self.pop_list[i]))
+
+   
+	def cal_fit(self, pop):
+		task_keys = [j for j in range(self.num_job)]
+		task_count = {key:0 for key in task_keys}
+		agent_keys = [j+1 for j in range(self.num_mc)]
+		agent_count = {key:0 for key in agent_keys}
+		key_count = {key:0 for key in task_keys}
+    
+		for p in pop:
+			p = int(p) # covert from np.float64 to int
+			gen_t = float(self.process_t[p][key_count[p]])
+			gen_m = int(self.machine_seq[p][key_count[p]])
+			task_count[p] = task_count[p] + gen_t
+			agent_count[gen_m] = agent_count[gen_m] + gen_t
+			
+			if agent_count[gen_m] < task_count[p]:
+				agent_count[gen_m] = task_count[p]
+			elif agent_count[gen_m] > task_count[p]:
+				task_count[p] = agent_count[gen_m]
+			
+			key_count[p] = key_count[p] + 1
+		makespan = max(task_count.values())
+		fit = makespan
+		return fit
    
 	def selection(self):
 		"""
 		roulette wheel approach
 		"""
 		parent = []
-		parent_fit = []
 		cumulate_prop = []
 		total_fit = 0
 
 		for i in range(self.pop_size):
-			self.pop_fit[i] = self.fit(self.pop_list[i])
+			self.pop_fit[i] = self.cal_fit(self.pop_list[i])
 			total_fit += self.pop_fit[i]
 
 		cumulate_prop.append(self.pop_fit[0])
 		for i in range(1, self.pop_size):
 			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit[i])
 			
-		for i in range(0, int(self.pop_size * self.crossover_rate)): 
+		for i in range(0, round(self.pop_size * self.parent_selection_rate)): 
 			for j in range(len(cumulate_prop)):
 				select_rand = np.random.rand()
 				if select_rand <= cumulate_prop[j]:
@@ -82,46 +108,50 @@ class GASolver(object):
 		return parent
    
 	def twoPtCrossover(self, parent):
-     
-		offspring_list = []
-		
-		for m in range(len(parent)):
-			parent_1, parent_2 = np.random.choice(parent, 2, replace=False)
-			child_1=parent_1[:]
-			child_2=parent_2[:]
+		offspring = []
+		for m in range(round(self.pop_size * self.crossover_rate / 2)):
+			p = np.random.choice(np.shape(parent)[0], 2, replace=False)
+			parent_1, parent_2 = parent[p[0]], parent[p[1]]
+			child = [copy.deepcopy(parent_1), copy.deepcopy(parent_2)]
 			cutpoint=list(np.random.choice(self.num_gene, 2, replace=False))
 			cutpoint.sort()
 		
-			child_1[cutpoint[0]:cutpoint[1]]=parent_2[cutpoint[0]:cutpoint[1]]
-			child_2[cutpoint[0]:cutpoint[1]]=parent_1[cutpoint[0]:cutpoint[1]]
+			child[0][cutpoint[0]:cutpoint[1]] = parent_2[cutpoint[0]:cutpoint[1]]
+			child[1][cutpoint[0]:cutpoint[1]] = parent_1[cutpoint[0]:cutpoint[1]]
 
 			# Mutation
-			if self.mutation_rate >= np.random.rand():
-				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_jobs, replace=False)) # chooses the position to mutation
-				t_value_last=self.offspring_list[m][m_chg[0]] # save the value which is on the first mutation position
-				for i in range(self.num_mutation_jobs-1):
-					self.offspring_list[m][m_chg[i]]=self.offspring_list[m][m_chg[i+1]] # displacement
-				
-				self.offspring_list[m][m_chg[self.num_mutation_jobs-1]]=t_value_last # move the value of the first mutation position to the last mutation position
+			for c in child:
+				if self.mutation_rate >= np.random.rand():
+					mutation_pos=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
+					tmp = c[mutation_pos[0]] # save the value which is on the first mutation position
+					for i in range(self.num_mutation_pos-1):
+						c[mutation_pos[i]] = c[mutation_pos[i+1]] # displacement
+					
+					c[mutation_pos[self.num_mutation_pos-1]] = tmp # move the value of the first mutation position to the last mutation position
+				offspring.append(copy.deepcopy(c))
+		return offspring
     
-	def repairment(self):
+	def repairment(self, offspring):
 		"""
+		Fix offspring to be feasible solution
 		TODO: 要看懂ㄟ
 		"""
-		for m in range(self.pop_size):
-			job_count={}
-			larger,less=[],[] # 'larger' record jobs appear in the chromosome more than m times, and 'less' records less than m times.
+		fit = []
+		# print(offspring)
+		for child in offspring:
+			job_count = {}
+			larger,less = [],[] # 'larger' record jobs appear in the chromosome more than m times, and 'less' records less than m times.
 			for i in range(self.num_job):
-				if i in self.offspring_list[m]:
-					count = self.offspring_list[m].count(i)
-					pos = self.offspring_list[m].index(i)
-					job_count[i]=[count,pos] # store the above two values to the job_count dictionary
+				if i in child:
+					count = list(child).count(i)
+					pos = list(child).index(i)
+					job_count[i] = [count,pos] # store the above two values to the job_count dictionary
 				else:
-					count=0
-					job_count[i]=[count,0]
+					count = 0
+					job_count[i] = [count,0]
 				if count > self.num_mc:
 					larger.append(i)
-				elif count< self.num_mc:
+				elif count < self.num_mc:
 					less.append(i)
 					
 			for k in range(len(larger)):
@@ -129,94 +159,56 @@ class GASolver(object):
 				while job_count[chg_job][0] > self.num_mc:
 					for d in range(len(less)):
 						if job_count[less[d]][0] < self.num_mc:                    
-							self.offspring_list[m][job_count[chg_job][1]]=less[d]
-							job_count[chg_job][1] = self.offspring_list[m].index(chg_job)
+							child[job_count[chg_job][1]]=less[d]
+							job_count[chg_job][1] = list(child).index(chg_job)
 							job_count[chg_job][0] = job_count[chg_job][0]-1
 							job_count[less[d]][0] = job_count[less[d]][0]+1                    
-						if job_count[chg_job][0]== self.num_mc:
+						if job_count[chg_job][0] == self.num_mc:
 							break     
+			fit.append(self.cal_fit(child))
+			
+		return offspring, fit
 	
 	def mutation(self):
 		for m in range(len(self.offspring_list)):
-			mutation_prob=np.random.rand()
+			mutation_prob = np.random.rand()
 			if self.mutation_rate >= mutation_prob:
-				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_jobs, replace=False)) # chooses the position to mutation
+				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
 				t_value_last=self.offspring_list[m][m_chg[0]] # save the value which is on the first mutation position
-				for i in range(self.num_mutation_jobs-1):
+				for i in range(self.num_mutation_pos-1):
 					self.offspring_list[m][m_chg[i]]=self.offspring_list[m][m_chg[i+1]] # displacement
 				
-				self.offspring_list[m][m_chg[self.num_mutation_jobs-1]]=t_value_last # move the value of the first mutation position to the last mutation position
-
-	def fit(self, pop):
-		j_keys=[j for j in range(self.num_job)]
-		key_count={key:0 for key in j_keys}
-		j_count={key:0 for key in j_keys}
-        # 1print(j_count)
-		m_keys=[j+1 for j in range(self.num_mc)]
-		m_count={key:0 for key in m_keys}
-		for i in pop:
-			gen_t=int(self.process_t[i][key_count[i]])
-			gen_m=int(self.machine_seq[i][key_count[i]])
-			j_count[i]=j_count[i]+gen_t
-			m_count[gen_m]=m_count[gen_m]+gen_t
-			
-			if m_count[gen_m]<j_count[i]:
-				m_count[gen_m]=j_count[i]
-			elif m_count[gen_m]>j_count[i]:
-				j_count[i]=m_count[gen_m]
-			
-			key_count[i]=key_count[i]+1
-		makespan=max(j_count.values())
-		chrom_fitness = 1/makespan
-		return chrom_fitness
-
-
+				self.offspring_list[m][m_chg[self.num_mutation_pos-1]]=t_value_last # move the value of the first mutation position to the last mutation position
   
-	def fitnessXX(self):
-		total_chromosome=copy.deepcopy(self.parent_list)+copy.deepcopy(self.offspring_list) # parent and offspring chromosomes combination
-		chrom_fitness,chrom_fit=[],[]
-		total_fitness=0
-		for m in range(self.pop_size*2):
-			j_keys=[j for j in range(self.num_job)]
-			key_count={key:0 for key in j_keys}
-			j_count={key:0 for key in j_keys}
-			m_keys=[j+1 for j in range(self.num_mc)]
-			m_count={key:0 for key in m_keys}
-			
-			for i in total_chromosome[m]:
-				gen_t=int(self.process_t[i][key_count[i]])
-				gen_m=int(self.machine_seq[i][key_count[i]])
-				j_count[i]=j_count[i]+gen_t
-				m_count[gen_m]=m_count[gen_m]+gen_t
-				
-				if m_count[gen_m]<j_count[i]:
-					m_count[gen_m]=j_count[i]
-				elif m_count[gen_m]>j_count[i]:
-					j_count[i]=m_count[gen_m]
-				
-				key_count[i]=key_count[i]+1
+	def replacement(self, offspring, offspring_fit):
+		self.pop_list = list(self.pop_list) + offspring
+		self.pop_fit = list(self.pop_fit) + offspring_fit
+		# print(self.pop_fit)
+		# print(self.pop_list)
+
+		# Sort
+		tmp = sorted(list(zip(self.pop_fit, list(self.pop_list))))
+		self.pop_fit, self.pop_list = zip(*tmp)
+		self.pop_list = list(self.pop_list[:self.pop_size])
+		self.pop_fit = list(self.pop_fit[:self.pop_size])
+  
+		# print(self.pop_fit)
 		
-			makespan=max(j_count.values())
-			chrom_fitness.append(1/makespan)
-			chrom_fit.append(makespan)
-			total_fitness=total_fitness+chrom_fitness[m]
-		return total_fitness
-  
-	def replacement(self, pop_fit, pop):
-		for i in range(self.pop_size*2):
-			if pop_fit[i]< self.Tbest_now:
-				self.Tbest_now=pop_fit[i]
-				sequence_now=copy.deepcopy(pop[i])
-		if self.Tbest_now<=self.Tbest:
-			self.Tbest=self.Tbest_now
-			self.sequence_best=copy.deepcopy(sequence_now)
+		self.Tbest_now = self.pop_fit[0]
+		sequence_now = copy.deepcopy(self.pop_list[0])
+
+		if self.Tbest_now <= self.Tbest:
+			self.Tbest = self.Tbest_now
+			self.sequence_best = copy.deepcopy(sequence_now)
    
-		self.makespan_rec.append(self.Tbest)
+		# self.makespan_rec.append(self.Tbest)
    
 	def progress_bar(self, n):
 		bar_cnt = (int(((n+1)/self.num_iter)*20))
-		space_cnt = 20 - bar_cnt
-		print("\rProgress: [" + "█"*bar_cnt + " "*space_cnt + f"] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter} T-best = {self.Tbest}", end="")
+		space_cnt = 20 - bar_cnt		
+		bar = "▇"*bar_cnt + " "*space_cnt
+		
+		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter} T-best = {self.Tbest}", end="")
    
 	def gantt_chart(self):
 		m_keys=[j+1 for j in range(self.num_mc)]
