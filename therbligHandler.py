@@ -192,6 +192,9 @@ class OHT(object):
             # and (tmp[-1].type == "A" or tmp[-1].type == "DA") \
             # and tb.type != "RL":
             #     tmp.append(Therblig(Type="RL", Obj1=tmp[-2].Obj1))  
+            
+    def set_relation(self, overlap=-1):
+        self.overlap = overlap
     
 #%% TBHandler
 class TBHandler(object):
@@ -199,7 +202,7 @@ class TBHandler(object):
         self.Pos = {}
         self.tbsl:Therbligs
         self.tbsr:Therbligs
-        self.OHT:OHT
+        self.OHT_list = []
         self.run()
 
     def save_pos(self):
@@ -215,6 +218,22 @@ class TBHandler(object):
         self.tbsr = Therbligs(self.Pos)
         tbsr_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(R)")   
         self.tbsr.read(tbsr_df)
+        
+    def read_therbligs(self, *tbss:Therbligs):
+        for tbs in tbss:
+            if not isinstance(tbs, Therbligs):
+                continue
+            else:
+                tmp = []
+                for tb in tbs.list:
+                    if len(tmp) != 0:
+                        if tmp[-1] == "A" or tmp[-1].type == "DA" and tb.type != "RL":
+                            raise ValueError("Invalid therblig list")  
+                    tmp.append(tb)
+                    if tb.type == "RL":
+                        # self.list.append(tmp.copy())
+                        self.OHT_list.append(OHT(tmp))
+                        tmp.clear()
     
     def create_OHT(self):
         self.OHT = OHT(self.tbsl, self.tbsr)
@@ -226,7 +245,8 @@ class TBHandler(object):
     def run(self):
         self.save_pos()
         self.save_tbs()
-        self.create_OHT()
+        self.read_therbligs(self.tbsl, self.tbsr)
+        # self.create_OHT()
         print(self.OHT)
 
 

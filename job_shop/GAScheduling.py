@@ -23,36 +23,36 @@ class GASolver(object):
 		self.machine_seq=[list(map(int,ms_tmp.iloc[i])) for i in range(self.num_job)]
 
 		# Raw input
-		self.population_size=int(input('Please input the size of population: ') or 30) # default value is 30
+		self.pop_size=int(input('Please input the size of population: ') or 30) # default value is 30
 		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default value is 0.8
 		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default value is 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
 		self.num_mutation_jobs=round(self.num_gene*mutation_selection_rate)
-		self.num_iteration=int(input('Please input number of iteration: ') or 100) # default value is 2000
+		self.num_iter=int(input('Please input number of iteration: ') or 100) # default value is 2000
 			
+		self.pop_list = np.zeros((self.pop_size, self.num_gene))
+		self.pop_fit = np.zeros(self.pop_size)
+   
+		self.makespan_rec = []
 		self.start_time = time.time()
   
-	def init_pop(self):
+	def init_pop(self) -> None:
 		self.Tbest=999999999999999
 		self.best_list, self.best_obj=[],[]
-		population_list=[]
-		self.makespan_record=[]
-		for i in range(self.population_size):
+		for i in range(self.pop_size):
 			nxm_random_num=list(np.random.permutation(self.num_gene)) # generate a random permutation of 0 to num_job*num_mc-1
-			self.population_list.append(nxm_random_num) # add to the population_list
+			self.pop_list.append(nxm_random_num) # add to the population_list
 			for j in range(self.num_gene):
-				self.population_list[i][j] = self.population_list[i][j] % self.num_job # convert to job number format, every job appears m times
-		return population_list
+				self.pop_list[i][j] = self.pop_list[i][j] % self.num_job # convert to job number format, every job appears m times
     
 	def run(self):
-		pop = self.init_pop()
-		for n in range(self.num_iteration):
+		self.init_pop()
+		for n in range(self.num_iter):
 			self.Tbest_now = 99999999999
-			parent = self.selection(pop)
-			self.twoPtCrossover(parent)
-			self.repairment()
-			self.mutation()
-			self.fitness()
+			parent = self.selection()
+			offspring = self.twoPtCrossover(parent) # with mutation
+			offspring = self.repairment(offspring)
+			self.fit()
 			self.replacement()
 			self.gantt_chart()
    
@@ -60,52 +60,55 @@ class GASolver(object):
 		"""
 		roulette wheel approach
 		"""
-		pk,qk=[],[]
-    
-		for i in range(self.population_size*2):
-			pk.append(self.chrom_fitness[i]/self.total_fitness)
-		for i in range(self.population_size*2):
-			cumulative=0
-			for j in range(0,i+1):
-				cumulative=cumulative+pk[j]
-			qk.append(cumulative)
+		parent = []
+		parent_fit = []
+		cumulate_prop = []
+		total_fit = 0
+
+		for i in range(self.pop_size):
+			self.pop_fit[i] = self.fit(self.pop_list[i])
+			total_fit += self.pop_fit[i]
+
+		cumulate_prop.append(self.pop_fit[0])
+		for i in range(1, self.pop_size):
+			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit[i])
+			
+		for i in range(0, int(self.pop_size * self.crossover_rate)): 
+			for j in range(len(cumulate_prop)):
+				select_rand = np.random.rand()
+				if select_rand <= cumulate_prop[j]:
+					parent.append(copy.deepcopy(self.pop_list[j]))
 		
-		selection_rand=[np.random.rand() for i in range(self.population_size)]
-		
-		for i in range(self.population_size):
-			if selection_rand[i]<=qk[0]:
-				self.population_list[i]=copy.deepcopy(self.total_chromosome[0])
-			else:
-				for j in range(0,self.population_size*2-1):
-					if selection_rand[i]>qk[j] and selection_rand[i]<=qk[j+1]:
-						self.population_list[i]=copy.deepcopy(self.total_chromosome[j+1])
-						break
+		return parent
    
 	def twoPtCrossover(self, parent):
-		parent_list=copy.deepcopy(parent)
-		offspring_list=copy.deepcopy(parent)
-		S=list(np.random.permutation(self.population_size)) # generate a random sequence to select the parent chromosome to crossover
+     
+		offspring_list = []
 		
-		for m in range(int(self.population_size/2)):
-			crossover_prob=np.random.rand()
-			if self.crossover_rate>=crossover_prob:
-				parent_1= self.population_list[S[2*m]][:]
-				parent_2= self.population_list[S[2*m+1]][:]
-				child_1=parent_1[:]
-				child_2=parent_2[:]
-				cutpoint=list(np.random.choice(self.num_gene, 2, replace=False))
-				cutpoint.sort()
-			
-				child_1[cutpoint[0]:cutpoint[1]]=parent_2[cutpoint[0]:cutpoint[1]]
-				child_2[cutpoint[0]:cutpoint[1]]=parent_1[cutpoint[0]:cutpoint[1]]
-				self.offspring_list[S[2*m]]=child_1[:]
-				self.offspring_list[S[2*m+1]]=child_2[:]
+		for m in range(len(parent)):
+			parent_1, parent_2 = np.random.choice(parent, 2, replace=False)
+			child_1=parent_1[:]
+			child_2=parent_2[:]
+			cutpoint=list(np.random.choice(self.num_gene, 2, replace=False))
+			cutpoint.sort()
+		
+			child_1[cutpoint[0]:cutpoint[1]]=parent_2[cutpoint[0]:cutpoint[1]]
+			child_2[cutpoint[0]:cutpoint[1]]=parent_1[cutpoint[0]:cutpoint[1]]
+
+			# Mutation
+			if self.mutation_rate >= np.random.rand():
+				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_jobs, replace=False)) # chooses the position to mutation
+				t_value_last=self.offspring_list[m][m_chg[0]] # save the value which is on the first mutation position
+				for i in range(self.num_mutation_jobs-1):
+					self.offspring_list[m][m_chg[i]]=self.offspring_list[m][m_chg[i+1]] # displacement
+				
+				self.offspring_list[m][m_chg[self.num_mutation_jobs-1]]=t_value_last # move the value of the first mutation position to the last mutation position
     
 	def repairment(self):
 		"""
 		TODO: 要看懂ㄟ
 		"""
-		for m in range(self.population_size):
+		for m in range(self.pop_size):
 			job_count={}
 			larger,less=[],[] # 'larger' record jobs appear in the chromosome more than m times, and 'less' records less than m times.
 			for i in range(self.num_job):
@@ -144,7 +147,7 @@ class GASolver(object):
 				
 				self.offspring_list[m][m_chg[self.num_mutation_jobs-1]]=t_value_last # move the value of the first mutation position to the last mutation position
 
-	def fitness(self, pop):
+	def fit(self, pop):
 		j_keys=[j for j in range(self.num_job)]
 		key_count={key:0 for key in j_keys}
 		j_count={key:0 for key in j_keys}
@@ -173,7 +176,7 @@ class GASolver(object):
 		total_chromosome=copy.deepcopy(self.parent_list)+copy.deepcopy(self.offspring_list) # parent and offspring chromosomes combination
 		chrom_fitness,chrom_fit=[],[]
 		total_fitness=0
-		for m in range(self.population_size*2):
+		for m in range(self.pop_size*2):
 			j_keys=[j for j in range(self.num_job)]
 			key_count={key:0 for key in j_keys}
 			j_count={key:0 for key in j_keys}
@@ -200,7 +203,7 @@ class GASolver(object):
 		return total_fitness
   
 	def replacement(self, pop_fit, pop):
-		for i in range(self.population_size*2):
+		for i in range(self.pop_size*2):
 			if pop_fit[i]< self.Tbest_now:
 				self.Tbest_now=pop_fit[i]
 				sequence_now=copy.deepcopy(pop[i])
@@ -208,12 +211,12 @@ class GASolver(object):
 			self.Tbest=self.Tbest_now
 			self.sequence_best=copy.deepcopy(sequence_now)
    
-		self.makespan_record.append(self.Tbest)
+		self.makespan_rec.append(self.Tbest)
    
 	def progress_bar(self, n):
-		bar_cnt = (int(((n+1)/self.num_iteration)*20))
+		bar_cnt = (int(((n+1)/self.num_iter)*20))
 		space_cnt = 20 - bar_cnt
-		print("\rProgress: [" + "█"*bar_cnt + " "*space_cnt + f"] {((n+1)/self.num_iteration):.2%} {n+1}/{self.num_iteration} T-best = {self.Tbest}", end="")
+		print("\rProgress: [" + "█"*bar_cnt + " "*space_cnt + f"] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter} T-best = {self.Tbest}", end="")
    
 	def gantt_chart(self):
 		m_keys=[j+1 for j in range(self.num_mc)]
@@ -233,7 +236,7 @@ class GASolver(object):
 			elif m_count[gen_m]>j_count[i]:
 				j_count[i]=m_count[gen_m]
 			
-			start_time=str(datetime.timedelta(seconds=j_count[i]-pt[i][key_count[i]])) # convert seconds to hours, minutes and seconds
+			start_time=str(datetime.timedelta(seconds=j_count[i]-self.process_t[i][key_count[i]])) # convert seconds to hours, minutes and seconds
 			
 			end_time=str(datetime.timedelta(seconds=j_count[i]))
 				
