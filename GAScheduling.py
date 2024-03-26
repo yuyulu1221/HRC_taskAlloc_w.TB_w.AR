@@ -15,20 +15,17 @@ class GASolver(object):
 		pt_tmp=pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
 		ms_tmp=pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
 
-		dfshape = pt_tmp.shape
-		self.num_agent = dfshape[1] # number of machines
-		print(self.num_agent)
-		self.num_job = dfshape[0] # number of jobs
-		print(self.num_job)
-		self.num_gene = self.num_agent * self.num_job - 1 # number of genes in a chromosome
+		self.num_task_per_job = [5, 6, 7]
+		self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
+		print(self.agent_seq_per_job)
+
+		self.num_agent = 3
+		self.num_job = len(self.num_task_per_job) # number of jobs
+		print("num_job: ", self.num_job)
+		self.num_gene = sum(self.num_task_per_job) # number of genes in a chromosome
+		# print(self.agent_seq)
 
 		self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
-		
-  		# self.machine_seq=[list(map(int, ms_tmp.iloc[i])) for i in range(self.num_job)]
-		# self.machine_seq = [np.random.permutation(seq_tmp) for _ in range(3)]
-		self.agent_seq_per_job = [[0, 2, 1], [1, 2], [0, 1, 2]]
-		self.num_task_per_job = [3, 2, 3]
-		# print(self.agent_seq)
 
 		# Raw input
 		self.pop_size=int(input('Please input the size of population: ') or 32) # default value is 32
@@ -37,7 +34,7 @@ class GASolver(object):
 		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default value is 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
 		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 100) # default value is 2000
+		self.num_iter=int(input('Please input number of iteration: ') or 200) # default value is 2000
 			
 		self.pop_list = []
 		self.pop_fit = []
@@ -67,7 +64,7 @@ class GASolver(object):
 			# for j in range(self.num_gene):
 			# 	self.pop_list[i][j] = self.pop_list[i][j] % self.num_job # convert to job number format, every job appears m times
 			self.pop_fit.append(self.cal_makespan(self.pop_list[i]))
-		print(self.pop_list)
+		# print(self.pop_list)
    
 	def cal_makespan(self, pop): # fitness
 		# print("pop: ", pop)
@@ -143,9 +140,7 @@ class GASolver(object):
 	def repairment(self, offspring):
 		"""
 		Fix offspring to be feasible solution
-		TODO: 要看懂ㄟ
 		"""
-
 		fit = []
 		for child in offspring:
 			# print("child_before: ", child)
@@ -155,6 +150,7 @@ class GASolver(object):
 			for job_id in child:
 				job_cnt[job_id] += 1
 			for i in range(self.num_job):
+				# print(i)
 				diff = self.num_task_per_job[i] - job_cnt[i]
 				if diff > 0:
 					insufficient_job += [i] * diff
@@ -189,8 +185,6 @@ class GASolver(object):
 	def replacement(self, offspring, offspring_fit):
 		self.pop_list = list(self.pop_list) + offspring
 		self.pop_fit = list(self.pop_fit) + offspring_fit
-		# print(self.pop_fit)
-		# print(self.pop_list)
 
 		# Sort
 		tmp = sorted(list(zip(self.pop_fit, list(self.pop_list))))
@@ -217,23 +211,6 @@ class GASolver(object):
 		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter} T-best = {self.Tbest}", end="")
    
 	def gantt_chart(self):
-		# m_keys=[j+1 for j in range(self.num_agent)]
-		# j_keys=[j for j in range(self.num_job)]
-		# key_count={key:0 for key in j_keys}
-		# j_count={key:0 for key in j_keys}
-		# m_count={key:0 for key in m_keys}
-		# j_record={}
-		# for i in self.sequence_best:
-			# gen_t=int(self.process_t[i][key_count[i]])
-			# gen_m=int(self.agent_seq[i][key_count[i]])
-			# j_count[i]=j_count[i]+gen_t
-			# m_count[gen_m]=m_count[gen_m]+gen_t
-			
-			# if m_count[gen_m]<j_count[i]:
-			# 	m_count[gen_m]=j_count[i]
-			# elif m_count[gen_m]>j_count[i]:
-			# 	j_count[i]=m_count[gen_m]
-
 		agent_time = [0 for _ in range(self.num_agent)]
 		job_time = [0 for _ in range(self.num_job)]
 		task_todo = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
@@ -258,15 +235,20 @@ class GASolver(object):
 			end_time = str(timedelta(seconds = end_time))
 			# end_time = j_count[i]
 				
-			task_dict[(job_id, agent)] = [start_time, end_time]
+			task_dict[(job_id, task_todo[job_id], agent)] = [start_time, end_time]
 			
 			task_todo[job_id] += 1
 			
 
-		tmp=[]
+		tmp = []
 		for job_id, agent_seq in enumerate(self.agent_seq_per_job):
-			for a in agent_seq:
-				tmp.append(dict(Task='Agent %s'%(a), Start='2018-07-14 %s'%(str(task_dict[(job_id,a)][0])), Finish='2018-07-14 %s'%(str(task_dict[(job_id,a)][1])),Resource='Job %s'%(job_id)))
+			for i, a in enumerate(agent_seq):
+				tmp.append(dict(
+        			Task='Agent %s'%(a), 
+           			Start='2018-07-14 %s'%(str(task_dict[(job_id, i, a)][0])), 
+              		Finish='2018-07-14 %s'%(str(task_dict[(job_id, i, a)][1])),
+                	Resource=f'Job{job_id}')
+               	)
 			# for j in j_keys:
 				# df.append(dict(Task=f'Machine {m}', Start=j_record[(j,m)][0], Finish=j_record[(j,m)][1]*1000, Resource=f'Job {j+1}'))
 		
