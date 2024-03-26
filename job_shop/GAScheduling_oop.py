@@ -1,13 +1,11 @@
 #%% importing required modules
-from cv2 import fitEllipse
 import pandas as pd
 import numpy as np
 import time
 import copy
 import plotly.express as px
 import datetime
-
-from sympy import Q
+from datetime import timedelta
 
 #%% GASolver
 class GASolver(object):
@@ -15,22 +13,22 @@ class GASolver(object):
 		pt_tmp=pd.read_excel("JSP_dataset.xlsx",sheet_name="Processing Time",index_col =[0])
 		ms_tmp=pd.read_excel("JSP_dataset.xlsx",sheet_name="Machines Sequence",index_col =[0])
 
-		dfshape=pt_tmp.shape
-		self.num_mc=dfshape[1] # number of machines
-		self.num_job=dfshape[0] # number of jobs
-		self.num_gene= self.num_mc * self.num_job # number of genes in a chromosome
+		dfshape = pt_tmp.shape
+		self.num_mc = dfshape[1] # number of machines
+		self.num_job = dfshape[0] # number of jobs
+		self.num_gene = self.num_mc * self.num_job # number of genes in a chromosome
 
-		self.process_t=[list(map(int, pt_tmp.iloc[i])) for i in range(self.num_job)]
-		self.machine_seq=[list(map(int,ms_tmp.iloc[i])) for i in range(self.num_job)]
+		self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
+		self.machine_seq=[list(map(int, ms_tmp.iloc[i])) for i in range(self.num_job)]
 
 		# Raw input
-		self.pop_size=int(input('Please input the size of population: ') or 30) # default value is 30
+		self.pop_size=int(input('Please input the size of population: ') or 32) # default value is 32
 		self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5)
 		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default value is 0.8
 		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default value is 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
 		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 100) # default value is 2000
+		self.num_iter=int(input('Please input number of iteration: ') or 10) # default value is 2000
 			
 		self.pop_list = []
 		self.pop_fit = []
@@ -68,7 +66,7 @@ class GASolver(object):
     
 		for p in pop:
 			p = int(p) # covert from np.float64 to int
-			gen_t = float(self.process_t[p][key_count[p]])
+			gen_t = int(self.process_t[p][key_count[p]])
 			gen_m = int(self.machine_seq[p][key_count[p]])
 			task_count[p] = task_count[p] + gen_t
 			agent_count[gen_m] = agent_count[gen_m] + gen_t
@@ -90,27 +88,28 @@ class GASolver(object):
 		parent = []
 		cumulate_prop = []
 		total_fit = 0
-
+		# print(self.pop_list)
 		for i in range(self.pop_size):
 			self.pop_fit[i] = self.cal_fit(self.pop_list[i])
 			total_fit += self.pop_fit[i]
-
+		# print(self.pop_fit)
 		cumulate_prop.append(self.pop_fit[0])
 		for i in range(1, self.pop_size):
-			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit[i])
+			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit[i]/total_fit)
+		# print(cumulate_prop)
 			
 		for i in range(0, round(self.pop_size * self.parent_selection_rate)): 
 			for j in range(len(cumulate_prop)):
 				select_rand = np.random.rand()
 				if select_rand <= cumulate_prop[j]:
 					parent.append(copy.deepcopy(self.pop_list[j]))
-		
+		# print(parent)
 		return parent
    
 	def twoPtCrossover(self, parent):
 		offspring = []
-		for m in range(round(self.pop_size * self.crossover_rate / 2)):
-			p = np.random.choice(np.shape(parent)[0], 2, replace=False)
+		for _ in range(round(self.pop_size * self.crossover_rate / 2)):
+			p = np.random.choice(len(parent), 2, replace=False)
 			parent_1, parent_2 = parent[p[0]], parent[p[1]]
 			child = [copy.deepcopy(parent_1), copy.deepcopy(parent_2)]
 			cutpoint=list(np.random.choice(self.num_gene, 2, replace=False))
@@ -228,23 +227,25 @@ class GASolver(object):
 			elif m_count[gen_m]>j_count[i]:
 				j_count[i]=m_count[gen_m]
 			
-			start_time=str(datetime.timedelta(seconds=j_count[i]-self.process_t[i][key_count[i]])) # convert seconds to hours, minutes and seconds
+			start_time = str(timedelta(seconds = j_count[i]-self.process_t[i][key_count[i]])) # convert seconds to hours, minutes and seconds
+			# start_time = j_count[i] - self.process_t[i][key_count[i]]
 			
-			end_time=str(datetime.timedelta(seconds=j_count[i]))
+			end_time = str(timedelta(seconds = j_count[i]))
+			# end_time = j_count[i]
 				
 			j_record[(i,gen_m)]=[start_time,end_time]
 			
 			key_count[i]=key_count[i]+1
 			
 
-		df=[]
+		tmp=[]
 		for m in m_keys:
-			# for j in j_keys:
-			#     df.append(dict(Task='Machine %s'%(m), Start='2018-07-14 %s'%(str(j_record[(j,m)][0])), Finish='2018-07-14 %s'%(str(j_record[(j,m)][1])),Resource='Job %s'%(j+1)))
 			for j in j_keys:
-				df.append(dict(Task=f'Machine {m}', Start=f'2024-03-17 {str(j_record[(j,m)][0])}', Finish=f'2024-03-17 {str(j_record[(j,m)][1])}',Resource=f'Job {j+1}'))
-
-		df = pd.DataFrame(df)
+				tmp.append(dict(Task='Machine %s'%(m), Start='2018-07-14 %s'%(str(j_record[(j,m)][0])), Finish='2018-07-14 %s'%(str(j_record[(j,m)][1])),Resource='Job %s'%(j+1)))
+			# for j in j_keys:
+				# df.append(dict(Task=f'Machine {m}', Start=j_record[(j,m)][0], Finish=j_record[(j,m)][1]*1000, Resource=f'Job {j+1}'))
+		
+		df = pd.DataFrame(tmp)
 
 		# fig = px.timeline(df, index_col='Resource', show_colorbar=True, group_tasks=True, showgrid_x=True, title='Job shop Schedule')
 		# py.iplot(fig, filename='GA_job_shop_scheduling', world_readable=True)

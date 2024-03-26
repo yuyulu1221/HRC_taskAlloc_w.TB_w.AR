@@ -56,66 +56,6 @@ class Therblig(object):
         
     def __repr__(self):
         return str(self.type)
-    
-#%% Inherit class        
-# class TE(Therblig):
-#     def __init__(self, From, To) -> None:
-#         super().__init__()
-#         self.From = From
-#         self.To = To
-#         self.moveSpeed = .8
-#         self.time = np.linalg.norm(self.To - self.From) / self.moveSpeed
-        
-#     def estimated_time(self) -> float:
-#         return np.linalg.norm(self.To - self.From) / self.moveSpeed     
-
-# class TL(Therblig):
-#     def __init__(self, From, To, Obj) -> None:
-#         super().__init__()
-#         self.From = From
-#         self.To = To
-#         self.Obj = Obj
-#         self.moveSpeed = .6
-#         self.time = np.linalg.norm(self.To - self.From) / self.moveSpeed
-        
-#     def estimated_time(self) -> float:
-#         return np.linalg.norm(self.To - self.From) / self.moveSpeed   
-        
-# class G(Therblig):
-#     def __init__(self, Obj) -> None:
-#         super().__init__()
-#         self.Obj = Obj
-#         self.time = .1
-
-# class RL(Therblig):
-#     def __init__(self, Obj) -> None:
-#         super().__init__()
-#         self.Obj = Obj
-#         self.time = .1
-        
-# class H(Therblig):
-#     def __init__(self, Obj) -> None:
-#         super().__init__()
-#         self.Obj = Obj
-#     # TODO How to estimate Holding time??
-        
-# class A(Therblig):
-#     def __init__(self, Obj1, Obj2) -> None:
-#         super().__init__()
-#         self.Obj1 = Obj1
-#         self.Obj2 = Obj2
-        
-# class DA(Therblig):
-#     def __init__(self, Obj1, Obj2) -> None:
-#         super().__init__()
-#         self.Obj1 = Obj1
-#         self.Obj2 = Obj2
-        
-# class P(Therblig):
-#     def __init__(self, Obj1, Obj2) -> None:
-#         super().__init__()
-#         self.Obj1 = Obj1
-#         self.Obj2 = Obj2
 
 #%% 動素序列(Linked-List)
 # class TherbligLinkedList(object):
@@ -153,7 +93,7 @@ class Therbligs(object):
     def __repr__(self):
         return ", ".join(map(str, self.list))
         
-    def read(self, df:pd.DataFrame):
+    def read(self, df: pd.DataFrame):
         for idx, row in df.iterrows():
             therblig = Therblig(
                 Type=row["Type"], 
@@ -167,32 +107,16 @@ class Therbligs(object):
 
 #%% 單手任務
 class OHT(object):
-    def __init__(self, *args):
-        self.list = []
-        for arg in args:
-            if not isinstance(arg, Therbligs):
-                continue
-            self.read(arg)
+    def __init__(self, ls:list):
+        self.tb_list = ls
+        self.in_edge = []
+        self.out_edge = []
+        self.bind_edge = []
             
     def __repr__(self):
-        return ", ".join(map(str, self.list))
-            
-    def read(self, tbs:Therbligs):
-        tmp = []
-        for tb in tbs.list:
-            if len(tmp) != 0:
-                if tmp[-1] == "A" or tmp[-1].type == "DA" and tb.type != "RL":
-                    raise ValueError("Invalid therblig list")  
-            tmp.append(tb)
-            if tb.type == "RL":
-                self.list.append(tmp.copy())
-                tmp.clear()
-                
-            # if tmp.count != 0 \
-            # and (tmp[-1].type == "A" or tmp[-1].type == "DA") \
-            # and tb.type != "RL":
-            #     tmp.append(Therblig(Type="RL", Obj1=tmp[-2].Obj1))  
-            
+        return "[" + ", ".join(map(str, self.tb_list)) + "]"
+    
+    # Handle overlap time
     def set_relation(self, overlap=-1):
         self.overlap = overlap
     
@@ -203,15 +127,15 @@ class TBHandler(object):
         self.tbsl:Therbligs
         self.tbsr:Therbligs
         self.OHT_list = []
-        self.run()
 
     def save_pos(self):
         pos_df = pd.read_excel("data1.xlsx", sheet_name="Position")
         for idx, pos in pos_df.iterrows():
             self.Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
     
+    # Save tbs by list
     def save_tbs(self):
-        self.tbsl = Therbligs(self.Pos)
+        self.tbsl = Therbligs(self.Pos) # save pos
         tbsl_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(L)")   
         self.tbsl.read(tbsl_df)
         
@@ -219,8 +143,9 @@ class TBHandler(object):
         tbsr_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(R)")   
         self.tbsr.read(tbsr_df)
         
-    def read_therbligs(self, *tbss:Therbligs):
-        for tbs in tbss:
+    # Convert tbs to oht    
+    def read_tbs(self):
+        for tbs in (self.tbsl, self.tbsr):
             if not isinstance(tbs, Therbligs):
                 continue
             else:
@@ -232,25 +157,18 @@ class TBHandler(object):
                     tmp.append(tb)
                     if tb.type == "RL":
                         # self.list.append(tmp.copy())
-                        self.OHT_list.append(OHT(tmp))
+                        self.OHT_list.append(OHT(tmp.copy()))
                         tmp.clear()
-    
-    def create_OHT(self):
-        self.OHT = OHT(self.tbsl, self.tbsr)
-        # print(self.OHT)
-        
-    def get_OHT(self):
-        return self.OHT
             
     def run(self):
         self.save_pos()
         self.save_tbs()
-        self.read_therbligs(self.tbsl, self.tbsr)
+        self.read_tbs()
         # self.create_OHT()
-        print(self.OHT)
+        print(self.OHT_list)
 
 
 
 #%% Main
-# myTBHandler = TBHandler()
-# myTBHandler.run()
+myTBHandler = TBHandler()
+myTBHandler.run()
