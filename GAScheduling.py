@@ -37,15 +37,15 @@ class GASolver():
 		self.MTM = read_MTM()
   
 		self.oht_list_per_job = oht_list_per_job
-		self.num_task_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
+		self.num_oht_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
 		# self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
-		self.agent_seq_per_job = [[0,1,2], [0,1,2,1]]
+		self.alloc_per_job = [[0,0,0],[0],[0,0,0]]
 		# print(self.agent_seq_per_job)
 
 		self.num_agent = 3
-		self.num_job = len(self.num_task_per_job) # number of jobs
+		self.num_job = len(self.num_oht_per_job) # number of jobs
 		print("num_job: ", self.num_job)
-		self.num_gene = sum(self.num_task_per_job) # number of genes in a chromosome
+		self.num_gene = sum(self.num_oht_per_job) # number of genes in a chromosome
 		# print(self.agent_seq)
 
 		self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
@@ -67,9 +67,9 @@ class GASolver():
     
 	def run(self):
 		self.init_pop()
-		for i in range(5):
-			self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
-			print(f"\n({i+1}) agent_seq_per_job: ", self.agent_seq_per_job)
+		for i in range(20):
+			self.alloc_per_job = [[np.random.randint(0, 3) for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
+			print(f"\n({i+1}) agent_seq_per_job: ", self.alloc_per_job)
 			for it in range(self.num_iter):
 				self.Tbest_now = 999999999
 				parent = self.selection()
@@ -82,7 +82,7 @@ class GASolver():
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
 		tmp = []
-		for i, seq in enumerate(self.agent_seq_per_job):
+		for i, seq in enumerate(self.alloc_per_job):
 			tmp += [i] * len(seq)
 		for i in range(self.pop_size):	
 			nxm_random_num = list(np.random.permutation(tmp)) # generate a random permutation of 0 to num_job*num_mc-1
@@ -100,16 +100,14 @@ class GASolver():
   
 		for job_id in pop: 
 			job_id = int(job_id)
-			# print("# -----------")		
-			# print("job_id: ", job_id)
-			# print("task_todo: ", task_todo)
-			agent = int(self.agent_seq_per_job[job_id][oht_cnt_per_job[job_id]])
-			# print("agent: ", agent)
-			# process_time = int(self.process_t[job_id][agent])
-			# process_time = int(self.oht_list_per_job[job_id][task_todo[job_id]].get_oht_time(agent))
+			# get the allocated agent
+			agent = int(self.alloc_per_job[job_id][oht_cnt_per_job[job_id]])
+			# get the task to do
 			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
+			# get process time from composed therbligs
 			process_time = int(oht.get_oht_time(agent, self.POS, self.MTM))
-			# print("job_id: ", job_id)		
+			
+   			# TODO: Different condition with task sequence
 			end_time = max(agent_time[agent], job_time[job_id]) + process_time
 			agent_time[agent] = end_time
 			job_time[job_id] = end_time
@@ -166,6 +164,17 @@ class GASolver():
 					c[mutation_pos[self.num_mutation_pos-1]] = tmp # move the value of the first mutation position to the last mutation position
 				offspring.append(copy.deepcopy(c))
 		return offspring
+ 
+	def mutation(self):
+		for m in range(len(self.offspring_list)):
+			mutation_prob = np.random.rand()
+			if self.mutation_rate >= mutation_prob:
+				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
+				t_value_last=self.offspring_list[m][m_chg[0]] # save the value which is on the first mutation position
+				for i in range(self.num_mutation_pos-1):
+					self.offspring_list[m][m_chg[i]]=self.offspring_list[m][m_chg[i+1]] # displacement
+				
+				self.offspring_list[m][m_chg[self.num_mutation_pos-1]]=t_value_last # move the value of the first mutation position to the last mutation position 
     
 	def repairment(self, offspring):
 		"""
@@ -181,7 +190,7 @@ class GASolver():
 				job_cnt[job_id] += 1
 			for i in range(self.num_job):
 				# print(i)
-				diff = self.num_task_per_job[i] - job_cnt[i]
+				diff = self.num_oht_per_job[i] - job_cnt[i]
 				if diff > 0:
 					insufficient_job += [i] * diff
 				diff_list.append(diff)
@@ -201,16 +210,7 @@ class GASolver():
 			
 		return offspring, fit
 	
-	def mutation(self):
-		for m in range(len(self.offspring_list)):
-			mutation_prob = np.random.rand()
-			if self.mutation_rate >= mutation_prob:
-				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
-				t_value_last=self.offspring_list[m][m_chg[0]] # save the value which is on the first mutation position
-				for i in range(self.num_mutation_pos-1):
-					self.offspring_list[m][m_chg[i]]=self.offspring_list[m][m_chg[i+1]] # displacement
-				
-				self.offspring_list[m][m_chg[self.num_mutation_pos-1]]=t_value_last # move the value of the first mutation position to the last mutation position
+
   
 	def replacement(self, offspring, offspring_fit):
 		self.pop_list = list(self.pop_list) + offspring
@@ -227,9 +227,10 @@ class GASolver():
 		self.Tbest_now = self.pop_fit[0]
 		sequence_now = copy.deepcopy(self.pop_list[0])
 
-		if self.Tbest_now <= self.Tbest:
+		if self.Tbest_now < self.Tbest:
 			self.Tbest = self.Tbest_now
 			self.sequence_best = copy.deepcopy(sequence_now)
+			self.alloc_per_job_best = self.alloc_per_job
    
 		# self.makespan_rec.append(self.Tbest)
    
@@ -238,7 +239,7 @@ class GASolver():
 		space_cnt = 20 - bar_cnt		
 		bar = "▇"*bar_cnt + " "*space_cnt
 		
-		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter} T-best = {self.Tbest}", end="")
+		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_now = {self.Tbest_now}, T-best = {self.Tbest}", end="")
    
 	def gantt_chart(self):
 		agent_time = [0 for _ in range(self.num_agent)]
@@ -250,7 +251,7 @@ class GASolver():
       
 			job_id = int(job_id)
 
-			agent = int(self.agent_seq_per_job[job_id][oht_cnt_per_job[job_id]])
+			agent = int(self.alloc_per_job_best[job_id][oht_cnt_per_job[job_id]])
 	
 			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
 			process_time = int(oht.get_oht_time(agent, self.POS, self.MTM))
@@ -272,7 +273,7 @@ class GASolver():
 			oht_cnt_per_job[job_id] += 1
 			
 		tmp = []
-		for job_id, agent_seq in enumerate(self.agent_seq_per_job):
+		for job_id, agent_seq in enumerate(self.alloc_per_job_best):
 			for i, a in enumerate(agent_seq):
 				tmp.append(dict(
         			Task='Agent %s'%(a), 
