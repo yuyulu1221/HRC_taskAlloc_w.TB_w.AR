@@ -1,4 +1,3 @@
-
 #%% 
 import numpy as np
 import pandas as pd
@@ -37,11 +36,12 @@ tb_abbr = {
 
 # Obj = ["Pillar", "Bush", "TopPlate", "BottomPlate"]
 
+AGENT = ["LH", "RH", "BOT"]
 
 
 #%% 動素
 class Therblig(object):
-    def __init__(self, Type:str, From:np.array=None, To:np.array=None, Obj1=None, Obj2=None):
+    def __init__(self, Type:str, From:str=None, To:str=None, Obj1:str=None, Obj2:str=None):
         if tb_abbr.get(Type) == None:
             raise ValueError("This type of therblig is not exist")
         self.type = Type
@@ -53,13 +53,19 @@ class Therblig(object):
         self.Obj2 = Obj2
         self.time: float
         # self.next = None
-        self.tb_process_time = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")   
+        # self.tb_process_time = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")   
         
     def __repr__(self):
-        return str(self.type)
+        return f"({str(self.type)})"
     
-    def get_therblig_time(self, agent, pos):
-        return self.tb_process_time.loc[self.type, agent]
+    def get_tb_time(self, agent, POS, MTM):
+        # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
+        if self.type in ["TL", "TE"]:
+            return MTM.at[self.type, AGENT[agent]]
+            # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
+        else:
+            return MTM.at[self.type, AGENT[agent]]
+            
 
 #%% 動素序列(Linked-List)
 # class TherbligLinkedList(object):
@@ -100,11 +106,11 @@ class RawTherbligList(object):
     def read(self, df: pd.DataFrame):
         for idx, row in df.iterrows():
             therblig = Therblig(
-                Type=row["Type"], 
-                From=self.Pos.get(row["From"], None), 
-                To=self.Pos.get(row["To"], None), 
-                Obj1=row["Obj1"], 
-                Obj2=row["Obj2"]
+                Type = row["Type"], 
+                From = row["From"], 
+                To = row["To"], 
+                Obj1 = row["Obj1"], 
+                Obj2 = row["Obj2"]
             )
             self.list.append(copy.copy(therblig))
 
@@ -118,13 +124,15 @@ class OHT(object):
         self.bind_edge = []
             
     def __repr__(self):
-        # return "[" + ", ".join(map(str, self.tb_list)) + "]"
-        return "[OHT]"
+        return "[" + ", ".join(map(str, self.tb_list)) + "]"
+        # return "[OHT]"
     
-    def get_oht_time(self, agent):
+    def get_oht_time(self, agent, pos, mtm):
+        # print("????")
         oht_t = 0
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(agent)
+            oht_t += tb.get_tb_time(agent, pos, mtm)
+        return oht_t
     
 #%% TBHandler
 class TBHandler(object):
@@ -165,13 +173,16 @@ class TBHandler(object):
                         # self.list.append(tmp.copy())
                         self.OHT_list.append(OHT(tmp.copy()))
                         tmp.clear()
+                        
+    def get_oht_time(self, oht_id, Pos):
+        self.OHT_list[oht_id].get_oht_time(Pos)
             
     def run(self):
-        self.save_pos()
+        # self.save_pos()
         self.save_tbs()
         self.read_tbs()
         # self.create_OHT()
-        # print(self.OHT_list)
+        print(self.OHT_list)
 
 
 

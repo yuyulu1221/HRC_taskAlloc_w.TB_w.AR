@@ -1,4 +1,4 @@
-# importing required modules
+#%% importing required modules
 import pandas as pd
 import numpy as np
 import time
@@ -7,18 +7,40 @@ import plotly.express as px
 import datetime
 from datetime import timedelta
 import therbligHandler as tbh
-from therbligHandler import OHT, RawTherbligList, Therblig
+from therbligHandler import *
+# from InfoHandler import *
 
-# GASolver
-class GASolver(object):
+#%% read position
+def read_POS():
+	pos_df = pd.read_excel("data1.xlsx", sheet_name="Position")
+	Pos = {}
+	for idx, pos in pos_df.iterrows():
+		Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
+	return Pos
+
+#%% read MTM
+def read_MTM():
+	mtm_df = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time", index_col=0)
+	return mtm_df
+
+_ = read_MTM()
+
+#%% GASolver
+class GASolver():
 	def __init__(self, oht_list_per_job):
+     
 		pt_tmp = pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
 		ms_tmp = pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
+
+		# Get position dict
+		self.POS = read_POS()
+		self.MTM = read_MTM()
   
 		self.oht_list_per_job = oht_list_per_job
 		self.num_task_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
-		self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
-		print(self.agent_seq_per_job)
+		# self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
+		self.agent_seq_per_job = [[0,1,2], [0,1,2,1]]
+		# print(self.agent_seq_per_job)
 
 		self.num_agent = 3
 		self.num_job = len(self.num_task_per_job) # number of jobs
@@ -35,7 +57,7 @@ class GASolver(object):
 		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default value is 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
 		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 200) # default value is 2000
+		self.num_iter=int(input('Please input number of iteration: ') or 500) # default value is 2000
 			
 		self.pop_list = []
 		self.pop_fit = []
@@ -45,13 +67,16 @@ class GASolver(object):
     
 	def run(self):
 		self.init_pop()
-		for it in range(self.num_iter):
-			self.Tbest_now = 999999999
-			parent = self.selection()
-			offspring = self.twoPtCrossover(parent) # with mutation
-			offspring, fit = self.repairment(offspring)
-			self.replacement(offspring, fit)
-			self.progress_bar(it)
+		for i in range(5):
+			self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
+			print(f"\n({i+1}) agent_seq_per_job: ", self.agent_seq_per_job)
+			for it in range(self.num_iter):
+				self.Tbest_now = 999999999
+				parent = self.selection()
+				offspring = self.twoPtCrossover(parent) # with mutation
+				offspring, fit = self.repairment(offspring)
+				self.replacement(offspring, fit)
+				self.progress_bar(it)
 		self.gantt_chart()
    
 	def init_pop(self) -> None:
@@ -71,21 +96,24 @@ class GASolver(object):
 		# print("pop: ", pop)
 		agent_time = [0 for _ in range(self.num_agent)]
 		job_time = [0 for _ in range(self.num_job)]
-		task_todo = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
+		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
+  
 		for job_id in pop: 
 			job_id = int(job_id)
 			# print("# -----------")		
 			# print("job_id: ", job_id)
 			# print("task_todo: ", task_todo)
-			agent = int(self.agent_seq_per_job[job_id][task_todo[job_id]])
+			agent = int(self.agent_seq_per_job[job_id][oht_cnt_per_job[job_id]])
 			# print("agent: ", agent)
-			process_time = int(self.process_t[job_id][agent])
-			process_time = int(self.oht_list_per_job[job_id][task_todo].get_oht_time(agent))
+			# process_time = int(self.process_t[job_id][agent])
+			# process_time = int(self.oht_list_per_job[job_id][task_todo[job_id]].get_oht_time(agent))
+			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
+			process_time = int(oht.get_oht_time(agent, self.POS, self.MTM))
 			# print("job_id: ", job_id)		
 			end_time = max(agent_time[agent], job_time[job_id]) + process_time
 			agent_time[agent] = end_time
 			job_time[job_id] = end_time
-			task_todo[job_id] += 1
+			oht_cnt_per_job[job_id] += 1
    
 		makespan = max(agent_time)
 		return makespan
@@ -215,40 +243,41 @@ class GASolver(object):
 	def gantt_chart(self):
 		agent_time = [0 for _ in range(self.num_agent)]
 		job_time = [0 for _ in range(self.num_job)]
-		task_todo = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
-		task_dict = {}
+		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
+		oht_dict = {}
 
 		for job_id in self.sequence_best: 
+      
 			job_id = int(job_id)
-			# print("# -----------")		
-			# print("job_id: ", job_id)
-			# print("task_todo: ", task_todo)
-			agent = int(self.agent_seq_per_job[job_id][task_todo[job_id]])
-			# print("agent: ", agent)
-			process_time = int(self.process_t[job_id][agent])
+
+			agent = int(self.agent_seq_per_job[job_id][oht_cnt_per_job[job_id]])
+	
+			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
+			process_time = int(oht.get_oht_time(agent, self.POS, self.MTM))
 			# print("job_id: ", job_id)		
 			end_time = max(agent_time[agent], job_time[job_id]) + process_time
 			agent_time[agent] = end_time
 			job_time[job_id] = end_time
 
-			start_time = str(timedelta(seconds = end_time - self.process_t[job_id][agent])) # convert seconds to hours, minutes and seconds
+			start_time = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
 			# start_time = j_count[i] - self.process_t[i][key_count[i]]
+			# print("s: ", start_time)
 			
 			end_time = str(timedelta(seconds = end_time))
 			# end_time = j_count[i]
+			# print("e:", end_time)
 				
-			task_dict[(job_id, task_todo[job_id], agent)] = [start_time, end_time]
+			oht_dict[(job_id, oht_cnt_per_job[job_id], agent)] = [start_time, end_time]
 			
-			task_todo[job_id] += 1
+			oht_cnt_per_job[job_id] += 1
 			
-
 		tmp = []
 		for job_id, agent_seq in enumerate(self.agent_seq_per_job):
 			for i, a in enumerate(agent_seq):
 				tmp.append(dict(
         			Task='Agent %s'%(a), 
-           			Start='2018-07-14 %s'%(str(task_dict[(job_id, i, a)][0])), 
-              		Finish='2018-07-14 %s'%(str(task_dict[(job_id, i, a)][1])),
+           			Start='2024-07-14 %s'%(str(oht_dict[(job_id, i, a)][0])), 
+              		Finish='2024-07-14 %s'%(str(oht_dict[(job_id, i, a)][1])),
                 	Resource=f'Job{job_id}')
                	)
 			# for j in j_keys:
