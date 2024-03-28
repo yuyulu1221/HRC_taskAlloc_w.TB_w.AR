@@ -53,9 +53,13 @@ class Therblig(object):
         self.Obj2 = Obj2
         self.time: float
         # self.next = None
+        self.tb_process_time = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")   
         
     def __repr__(self):
         return str(self.type)
+    
+    def get_therblig_time(self, agent, pos):
+        return self.tb_process_time.loc[self.type, agent]
 
 #%% 動素序列(Linked-List)
 # class TherbligLinkedList(object):
@@ -86,7 +90,7 @@ class Therblig(object):
 #                 self.ptr.next = copy.copy(therblig)
 #                 self.ptr = self.ptr.next
 #%% 動素序列
-class Therbligs(object):
+class RawTherbligList(object):
     def __init__(self, Pos):
         self.list = []
         self.Pos = Pos
@@ -114,18 +118,20 @@ class OHT(object):
         self.bind_edge = []
             
     def __repr__(self):
-        return "[" + ", ".join(map(str, self.tb_list)) + "]"
+        # return "[" + ", ".join(map(str, self.tb_list)) + "]"
+        return "[OHT]"
     
-    # Handle overlap time
-    def set_relation(self, overlap=-1):
-        self.overlap = overlap
+    def get_oht_time(self, agent):
+        oht_t = 0
+        for tb in self.tb_list:
+            oht_t += tb.get_tb_time(agent)
     
 #%% TBHandler
 class TBHandler(object):
     def __init__(self):
         self.Pos = {}
-        self.tbsl:Therbligs
-        self.tbsr:Therbligs
+        self.tbsl:RawTherbligList
+        self.tbsr:RawTherbligList
         self.OHT_list = []
 
     def save_pos(self):
@@ -135,24 +141,24 @@ class TBHandler(object):
     
     # Save tbs by list
     def save_tbs(self):
-        self.tbsl = Therbligs(self.Pos) # save pos
+        self.tbsl = RawTherbligList(self.Pos) # save pos
         tbsl_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(L)")   
         self.tbsl.read(tbsl_df)
         
-        self.tbsr = Therbligs(self.Pos)
+        self.tbsr = RawTherbligList(self.Pos)
         tbsr_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(R)")   
         self.tbsr.read(tbsr_df)
         
     # Convert tbs to oht    
     def read_tbs(self):
         for tbs in (self.tbsl, self.tbsr):
-            if not isinstance(tbs, Therbligs):
+            if not isinstance(tbs, RawTherbligList):
                 continue
             else:
                 tmp = []
                 for tb in tbs.list:
                     if len(tmp) != 0:
-                        if tmp[-1] == "A" or tmp[-1].type == "DA" and tb.type != "RL":
+                        if (tmp[-1].type == "A" or tmp[-1].type == "DA") and tb.type != "RL":
                             raise ValueError("Invalid therblig list")  
                     tmp.append(tb)
                     if tb.type == "RL":
@@ -165,10 +171,10 @@ class TBHandler(object):
         self.save_tbs()
         self.read_tbs()
         # self.create_OHT()
-        print(self.OHT_list)
+        # print(self.OHT_list)
 
 
 
 #%% Main
-myTBHandler = TBHandler()
-myTBHandler.run()
+# myTBHandler = TBHandler()
+# myTBHandler.run()

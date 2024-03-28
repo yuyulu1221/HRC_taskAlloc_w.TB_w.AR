@@ -6,16 +6,17 @@ import copy
 import plotly.express as px
 import datetime
 from datetime import timedelta
-
-from psutil import process_iter
+import therbligHandler as tbh
+from therbligHandler import OHT, RawTherbligList, Therblig
 
 # GASolver
 class GASolver(object):
-	def __init__(self):
-		pt_tmp=pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
-		ms_tmp=pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
-
-		self.num_task_per_job = [5, 6, 7]
+	def __init__(self, oht_list_per_job):
+		pt_tmp = pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
+		ms_tmp = pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
+  
+		self.oht_list_per_job = oht_list_per_job
+		self.num_task_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
 		self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
 		print(self.agent_seq_per_job)
 
@@ -79,6 +80,7 @@ class GASolver(object):
 			agent = int(self.agent_seq_per_job[job_id][task_todo[job_id]])
 			# print("agent: ", agent)
 			process_time = int(self.process_t[job_id][agent])
+			process_time = int(self.oht_list_per_job[job_id][task_todo].get_oht_time(agent))
 			# print("job_id: ", job_id)		
 			end_time = max(agent_time[agent], job_time[job_id]) + process_time
 			agent_time[agent] = end_time
@@ -261,5 +263,5 @@ class GASolver(object):
 		fig.update_yaxes(autorange="reversed")
 		fig.show()
   
-solver = GASolver()
-solver.run()
+# solver = GASolver()
+# solver.run()
