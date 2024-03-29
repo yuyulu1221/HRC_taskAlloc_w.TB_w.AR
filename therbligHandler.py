@@ -57,14 +57,14 @@ class Therblig(object):
         # self.tb_process_time = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")   
         
     def __repr__(self):
-        return f"({str(self.name)})"
+        return f"#{str(self.name)}"
     
     def get_tb_time(self, agent, POS, MTM):
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.name in ["R", "M"]:
             dist = (np.linalg.norm(POS[self.To] - POS[self.From]) + 2) // 2 * 2
             dist = dist if dist < 28 else 28
-            return MTM.at[self.name + str(int(dist)) + "B", AGENT[agent]]
+            return MTM.at[self.name + str(int(dist)) + self.Type, AGENT[agent]]
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
         else:
             return MTM.at[self.name, AGENT[agent]]
