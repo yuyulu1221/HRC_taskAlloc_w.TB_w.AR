@@ -29,8 +29,8 @@ _ = read_MTM()
 class GASolver():
 	def __init__(self, oht_list_per_job):
      
-		pt_tmp = pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
-		ms_tmp = pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
+		# pt_tmp = pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
+		# ms_tmp = pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
 
 		# Get position dict
 		self.POS = read_POS()
@@ -39,7 +39,7 @@ class GASolver():
 		self.oht_list_per_job = oht_list_per_job
 		self.num_oht_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
 		# self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
-		self.alloc_per_job = [[0,0,0],[0],[0,0,0]]
+		self.alloc_per_job = [[np.random.randint(0, 3) for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
 		# print(self.agent_seq_per_job)
 
 		self.num_agent = 3
@@ -48,7 +48,7 @@ class GASolver():
 		self.num_gene = sum(self.num_oht_per_job) # number of genes in a chromosome
 		# print(self.agent_seq)
 
-		self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
+		# self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
 
 		# Raw input
 		self.pop_size=int(input('Please input the size of population: ') or 32) # default value is 32
@@ -57,7 +57,7 @@ class GASolver():
 		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default value is 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
 		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 500) # default value is 2000
+		self.num_iter=int(input('Please input number of iteration: ') or 200) # default value is 2000
 			
 		self.pop_list = []
 		self.pop_fit = []
@@ -67,7 +67,7 @@ class GASolver():
     
 	def run(self):
 		self.init_pop()
-		for i in range(20):
+		for i in range(5):
 			self.alloc_per_job = [[np.random.randint(0, 3) for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
 			print(f"\n({i+1}) agent_seq_per_job: ", self.alloc_per_job)
 			for it in range(self.num_iter):
@@ -276,10 +276,10 @@ class GASolver():
 		for job_id, agent_seq in enumerate(self.alloc_per_job_best):
 			for i, a in enumerate(agent_seq):
 				tmp.append(dict(
-        			Task='Agent %s'%(a), 
-           			Start='2024-07-14 %s'%(str(oht_dict[(job_id, i, a)][0])), 
-              		Finish='2024-07-14 %s'%(str(oht_dict[(job_id, i, a)][1])),
-                	Resource=f'Job{job_id}')
+        			Task = f'{AGENT[a]}', 
+           			Start = f'2024-07-14 {(str(oht_dict[(job_id, i, a)][0]))}', 
+              		Finish = f'2024-07-14 {(str(oht_dict[(job_id, i, a)][1]))}',
+                	Resource =f'Job{job_id}')
                	)
 			# for j in j_keys:
 				# df.append(dict(Task=f'Machine {m}', Start=j_record[(j,m)][0], Finish=j_record[(j,m)][1]*1000, Resource=f'Job {j+1}'))

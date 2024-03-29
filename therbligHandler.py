@@ -5,8 +5,8 @@ import copy
 
 #%% Test
 tb_abbr = {
-    "TE": "Transport Empty",
-    "TL": "Transport Loaded",
+    "R": "Reach",
+    "M": "Move",
     "G": "Grasp",
     "RL": "Release Load",
     "A": "Assemble",
@@ -41,14 +41,15 @@ AGENT = ["LH", "RH", "BOT"]
 
 #%% 動素
 class Therblig(object):
-    def __init__(self, Type:str, From:str=None, To:str=None, Obj1:str=None, Obj2:str=None):
-        if tb_abbr.get(Type) == None:
+    def __init__(self, Name:str=None, From:str=None, To:str=None, Type:str=None, Obj1:str=None, Obj2:str=None):
+        if tb_abbr.get(Name) == None:
             raise ValueError("This type of therblig is not exist")
-        self.type = Type
+        self.name = Name
         self.start: float
         self.end: float
         self.From = From
         self.To = To
+        self.Type = Type
         self.Obj1 = Obj1
         self.Obj2 = Obj2
         self.time: float
@@ -56,15 +57,17 @@ class Therblig(object):
         # self.tb_process_time = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")   
         
     def __repr__(self):
-        return f"({str(self.type)})"
+        return f"({str(self.name)})"
     
     def get_tb_time(self, agent, POS, MTM):
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
-        if self.type in ["TL", "TE"]:
-            return MTM.at[self.type, AGENT[agent]]
+        if self.name in ["R", "M"]:
+            dist = (np.linalg.norm(POS[self.To] - POS[self.From]) + 2) // 2 * 2
+            dist = dist if dist < 28 else 28
+            return MTM.at[self.name + str(int(dist)) + "B", AGENT[agent]]
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
         else:
-            return MTM.at[self.type, AGENT[agent]]
+            return MTM.at[self.name, AGENT[agent]]
             
 
 #%% 動素序列(Linked-List)
@@ -106,9 +109,10 @@ class RawTherbligList(object):
     def read(self, df: pd.DataFrame):
         for idx, row in df.iterrows():
             therblig = Therblig(
-                Type = row["Type"], 
+                Name = row["Name"], 
                 From = row["From"], 
                 To = row["To"], 
+                Type = row["Type"],
                 Obj1 = row["Obj1"], 
                 Obj2 = row["Obj2"]
             )
@@ -166,10 +170,10 @@ class TBHandler(object):
                 tmp = []
                 for tb in tbs.list:
                     if len(tmp) != 0:
-                        if (tmp[-1].type == "A" or tmp[-1].type == "DA") and tb.type != "RL":
+                        if (tmp[-1].name == "A" or tmp[-1].name == "DA") and tb.name != "RL":
                             raise ValueError("Invalid therblig list")  
                     tmp.append(tb)
-                    if tb.type == "RL":
+                    if tb.name == "RL":
                         # self.list.append(tmp.copy())
                         self.OHT_list.append(OHT(tmp.copy()))
                         tmp.clear()

@@ -26,9 +26,11 @@ oht_list_per_job = []
 # for i, oht in enumerate(tbh.OHT_list):
 # 	oht_list_per_job[i % num_job].append(copy.deepcopy(oht))
 
-oht_list_per_job.append(tbh.OHT_list[:3])
+oht_list_per_job.append(tbh.OHT_list[0:1])
+oht_list_per_job.append(tbh.OHT_list[1:3])
 oht_list_per_job.append(tbh.OHT_list[3:4])
-oht_list_per_job.append(tbh.OHT_list[4:])
+oht_list_per_job.append(tbh.OHT_list[4:5])
+oht_list_per_job.append(tbh.OHT_list[5:7])
  
 print(oht_list_per_job)
 
