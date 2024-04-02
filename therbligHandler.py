@@ -147,20 +147,15 @@ class TBHandler(object):
         self.tbsl:RawTherbligList
         self.tbsr:RawTherbligList
         self.OHT_list = []
-
-    def save_pos(self):
-        pos_df = pd.read_excel("data1.xlsx", sheet_name="Position")
-        for idx, pos in pos_df.iterrows():
-            self.Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
     
     # Save tbs by list
     def save_tbs(self):
         self.tbsl = RawTherbligList(self.Pos) # save pos
-        tbsl_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(L)")   
+        tbsl_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(L)")   
         self.tbsl.read(tbsl_df)
         
         self.tbsr = RawTherbligList(self.Pos)
-        tbsr_df = pd.read_excel("data1.xlsx", sheet_name="Therbligs(R)")   
+        tbsr_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(R)")   
         self.tbsr.read(tbsr_df)
         
     # Convert tbs to oht    

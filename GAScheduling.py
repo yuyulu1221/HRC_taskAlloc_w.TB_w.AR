@@ -12,7 +12,7 @@ from therbligHandler import *
 
 #%% read position
 def read_POS():
-	pos_df = pd.read_excel("data1.xlsx", sheet_name="Position")
+	pos_df = pd.read_excel("data.xlsx", sheet_name="Position")
 	Pos = {}
 	for idx, pos in pos_df.iterrows():
 		Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
@@ -20,7 +20,7 @@ def read_POS():
 
 #%% read MTM
 def read_MTM():
-	mtm_df = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time", index_col=0)
+	mtm_df = pd.read_excel("data.xlsx", sheet_name="Therblig Process Time", index_col=0)
 	return mtm_df
 
 _ = read_MTM()
