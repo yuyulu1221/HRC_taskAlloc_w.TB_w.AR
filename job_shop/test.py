@@ -26,9 +26,22 @@
 # fig = px.timeline(df, x_start='Start', x_end='Finish', y='Task', color='Resource', title='Job shop Schedule')
 # fig.update_yaxes(autorange="reversed")
 # fig.show()
-a = [1, 2 ,3]
-b = [9, 8 ,7]
 
-b, a = zip(*sorted(zip(b, a)))
+
+# a = [1, 2 ,3]
+# b = [9, 8 ,7]
+
+# b, a = zip(*sorted(zip(b, a)))
+# print(a)
+# print(b)
+
+
+a = {
+	'a': 5
+}
+
+def aa(a):
+	a['a'] = 6
+ 
+aa(a)
 print(a)
-print(b)

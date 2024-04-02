@@ -59,10 +59,12 @@ class Therblig(object):
     def __repr__(self):
         return f"#{str(self.name)}"
     
-    def get_tb_time(self, agent, POS, MTM):
+    def get_tb_time(self, agent, agent_POS, POS, MTM):
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.name in ["R", "M"]:
-            dist = (np.linalg.norm(POS[self.To] - POS[self.From]) + 2) // 2 * 2
+            dist = (np.linalg.norm(POS[self.To] - POS[AGENT[agent]]) + 2) // 2 * 2
+            # set agent to new position
+            agent_POS[AGENT[agent]] = POS[self.To]
             dist = dist if dist < 28 else 28
             return MTM.at[self.name + str(int(dist)) + self.Type, AGENT[agent]]
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
@@ -128,14 +130,14 @@ class OHT(object):
         self.bind_edge = []
             
     def __repr__(self):
-        return "[" + ", ".join(map(str, self.tb_list)) + "]"
+        return "(" + ", ".join(map(str, self.tb_list)) + ")"
         # return "[OHT]"
     
-    def get_oht_time(self, agent, pos, mtm):
+    def get_oht_time(self, agent, agent_pos, pos, mtm):
         # print("????")
         oht_t = 0
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(agent, pos, mtm)
+            oht_t += tb.get_tb_time(agent, agent_pos, pos, mtm)
         return oht_t
     
 #%% TBHandler

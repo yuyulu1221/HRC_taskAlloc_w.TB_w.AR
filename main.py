@@ -28,9 +28,9 @@ oht_list_per_job = []
 
 oht_list_per_job.append(tbh.OHT_list[0:1])
 oht_list_per_job.append(tbh.OHT_list[1:3])
-oht_list_per_job.append(tbh.OHT_list[3:4])
-oht_list_per_job.append(tbh.OHT_list[4:5])
-oht_list_per_job.append(tbh.OHT_list[5:7])
+# oht_list_per_job.append(tbh.OHT_list[3:4])
+# oht_list_per_job.append(tbh.OHT_list[4:5])
+# oht_list_per_job.append(tbh.OHT_list[5:7])
  
 print(oht_list_per_job)
 

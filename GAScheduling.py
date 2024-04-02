@@ -25,6 +25,18 @@ def read_MTM():
 
 _ = read_MTM()
 
+# To list all possible cases about n tasks allocation
+def carry_10_to_3(num, length) -> list:
+	res = []
+	while(num > 0 and len(res) < length):
+		res.append(num % 3)
+		num //= 3
+	n = len(res)
+	for _ in range(length - n):
+		res.append(0)
+	return num, res
+	
+
 #%% GASolver
 class GASolver():
 	def __init__(self, oht_list_per_job):
@@ -32,14 +44,15 @@ class GASolver():
 		# pt_tmp = pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
 		# ms_tmp = pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
 
-		# Get position dict
+		# Get position dict -> str: np.array_1x3
 		self.POS = read_POS()
+		# Get MTM dataframe
 		self.MTM = read_MTM()
   
 		self.oht_list_per_job = oht_list_per_job
 		self.num_oht_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
 		# self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
-		self.alloc_per_job = [[np.random.randint(0, 3) for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
+		self.alloc_per_job = [[0 for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
 		# print(self.agent_seq_per_job)
 
 		self.num_agent = 3
@@ -51,13 +64,13 @@ class GASolver():
 		# self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
 
 		# Raw input
-		self.pop_size=int(input('Please input the size of population: ') or 32) # default value is 32
-		self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5)
-		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default value is 0.8
-		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default value is 0.2
+		self.pop_size=int(input('Please input the size of population: ') or 32) # default: 32
+		self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5) # default: 0.8
+		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default: 0.8
+		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default: 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
 		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 200) # default value is 2000
+		self.num_iter=int(input('Please input number of iteration: ') or 50) # default: 2000
 			
 		self.pop_list = []
 		self.pop_fit = []
@@ -67,9 +80,8 @@ class GASolver():
     
 	def run(self):
 		self.init_pop()
-		for i in range(5):
-			self.alloc_per_job = [[np.random.randint(0, 3) for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
-			print(f"\n({i+1}) agent_seq_per_job: ", self.alloc_per_job)
+		for i in range(3**self.num_gene):
+			self.gen_alloc_per_job(i)
 			for it in range(self.num_iter):
 				self.Tbest_now = 999999999
 				parent = self.selection()
@@ -77,6 +89,7 @@ class GASolver():
 				offspring, fit = self.repairment(offspring)
 				self.replacement(offspring, fit)
 				self.progress_bar(it)
+			print("\n")
 		self.gantt_chart()
    
 	def init_pop(self) -> None:
@@ -87,17 +100,26 @@ class GASolver():
 		for i in range(self.pop_size):	
 			nxm_random_num = list(np.random.permutation(tmp)) # generate a random permutation of 0 to num_job*num_mc-1
 			self.pop_list.append(nxm_random_num) # add to the population_list
-			# for j in range(self.num_gene):
-			# 	self.pop_list[i][j] = self.pop_list[i][j] % self.num_job # convert to job number format, every job appears m times
 			self.pop_fit.append(self.cal_makespan(self.pop_list[i]))
 		# print(self.pop_list)
    
+	def gen_alloc_per_job(self, remain):
+		self.alloc_per_job = []
+		for num_oht in self.num_oht_per_job:
+			remain, tmp = carry_10_to_3(remain, num_oht)
+			self.alloc_per_job.append(tmp)
+		print("alloc_per_job: ", self.alloc_per_job)
+
 	def cal_makespan(self, pop): # fitness
 		# print("pop: ", pop)
 		agent_time = [0 for _ in range(self.num_agent)]
 		job_time = [0 for _ in range(self.num_job)]
 		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
-  
+		agent_POS = {
+			"LH": self.POS["LH"],
+			"RH": self.POS["RH"],
+			"BOT": self.POS["BOT"],
+		}
 		for job_id in pop: 
 			job_id = int(job_id)
 			# get the allocated agent
@@ -105,7 +127,7 @@ class GASolver():
 			# get the task to do
 			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
 			# get process time from composed therbligs
-			process_time = int(oht.get_oht_time(agent, self.POS, self.MTM))
+			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
 			
    			# TODO: Different condition with task sequence
 			end_time = max(agent_time[agent], job_time[job_id]) + process_time
@@ -246,7 +268,6 @@ class GASolver():
 		job_time = [0 for _ in range(self.num_job)]
 		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
 		oht_dict = {}
-
 		for job_id in self.sequence_best: 
       
 			job_id = int(job_id)
@@ -254,7 +275,14 @@ class GASolver():
 			agent = int(self.alloc_per_job_best[job_id][oht_cnt_per_job[job_id]])
 	
 			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
-			process_time = int(oht.get_oht_time(agent, self.POS, self.MTM))
+   
+			agent_POS = {
+				"LH": self.POS["LH"],
+				"RH": self.POS["RH"],
+				"BOT": self.POS["BOT"],
+			}
+   
+			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
 			# print("job_id: ", job_id)		
 			end_time = max(agent_time[agent], job_time[job_id]) + process_time
 			agent_time[agent] = end_time
