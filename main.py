@@ -1,4 +1,4 @@
-from GAScheduling import *
+from GAScheduling_oht_rk import *
 import copy
 from therbligHandler import *
 import numpy as np
@@ -14,9 +14,6 @@ import numpy as np
 # 	mtm_df = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")
 # 	return mtm_df
 
-POS = read_POS()
-MTM = read_MTM()
-
 tbh = TBHandler()
 tbh.run()
 
@@ -26,11 +23,10 @@ oht_list_per_job = []
 # for i, oht in enumerate(tbh.OHT_list):
 # 	oht_list_per_job[i % num_job].append(copy.deepcopy(oht))
 
+
 oht_list_per_job.append(tbh.OHT_list[0:2])
-oht_list_per_job.append(tbh.OHT_list[2:])
-# oht_list_per_job.append(tbh.OHT_list[3:4])
 # oht_list_per_job.append(tbh.OHT_list[4:5])
-# oht_list_per_job.append(tbh.OHT_list[5:7])
+oht_list_per_job.append(tbh.OHT_list[2:])
  
 print(oht_list_per_job)
 

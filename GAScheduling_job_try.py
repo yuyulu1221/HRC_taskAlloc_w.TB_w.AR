@@ -23,7 +23,6 @@ def read_MTM():
 	mtm_df = pd.read_excel("data.xlsx", sheet_name="Therblig Process Time", index_col=0)
 	return mtm_df
 
-_ = read_MTM()
 
 # To list all possible cases about n tasks allocation
 def carry_10_to_3(num, length) -> list:
@@ -48,17 +47,20 @@ class GASolver():
 		self.POS = read_POS()
 		# Get MTM dataframe
 		self.MTM = read_MTM()
-  
+
 		self.oht_list_per_job = oht_list_per_job
 		self.num_oht_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
+		self.num_oht = sum(self.num_oht_per_job)
 		# self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
 		self.alloc_per_job = [[0 for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
 		# print(self.agent_seq_per_job)
+		self.alloc_random_key = [[[0.5, 0.5, 0.5] for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
+		self.alloc_res = [[0 for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
 
 		self.num_agent = 3
 		self.num_job = len(self.num_oht_per_job) # number of jobs
 		print("num_job: ", self.num_job)
-		self.num_gene = sum(self.num_oht_per_job) # number of genes in a chromosome
+		self.num_gene = self.num_oht * 4 # number of genes in a chromosome
 		# print(self.agent_seq)
 
 		# self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
@@ -69,27 +71,26 @@ class GASolver():
 		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default: 0.8
 		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default: 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
-		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 50) # default: 2000
+		self.num_mutation_pos=round(self.num_gene / 4 * mutation_selection_rate)
+		self.num_iter=int(input('Please input number of iteration: ') or 200) # default: 2000
 			
 		self.pop_list = []
 		self.pop_fit = []
+		self.rk_pop_list = []
    
 		self.makespan_rec = []
 		self.start_time = time.time()
     
 	def run(self):
 		self.init_pop()
-		for i in range(3**self.num_gene):
-			self.gen_alloc_per_job(i)
-			for it in range(self.num_iter):
-				self.Tbest_now = 999999999
-				parent = self.selection()
-				offspring = self.twoPtCrossover(parent) # with mutation
-				offspring, fit = self.repairment(offspring)
-				self.replacement(offspring, fit)
-				self.progress_bar(it)
-			print("\n")
+		for it in range(self.num_iter):
+			self.Tbest_now = 999999999
+			parent = self.selection()
+			offspring = self.twoPtCrossover(parent) # with mutation
+			offspring, fit = self.repairment(offspring)
+			self.replacement(offspring, fit)
+			self.progress_bar(it)
+		print("\n")
 		self.gantt_chart()
    
 	def init_pop(self) -> None:
@@ -100,7 +101,8 @@ class GASolver():
 		for i in range(self.pop_size):	
 			nxm_random_num = list(np.random.permutation(tmp)) # generate a random permutation of 0 to num_job*num_mc-1
 			self.pop_list.append(nxm_random_num) # add to the population_list
-			self.pop_fit.append(self.cal_makespan(self.pop_list[i]))
+			self.rk_pop_list.append([[[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(num_oht)] for num_oht in self.num_oht_per_job])
+			self.pop_fit.append(self.cal_makespan(i, self.pop_list[i]))
 		# print(self.pop_list)
    
 	def gen_alloc_per_job(self, remain):
@@ -108,9 +110,21 @@ class GASolver():
 		for num_oht in self.num_oht_per_job:
 			remain, tmp = carry_10_to_3(remain, num_oht)
 			self.alloc_per_job.append(tmp)
-		print("alloc_per_job: ", self.alloc_per_job)
 
-	def cal_makespan(self, pop): # fitness
+	def decide_agent(self, pop_id, job_id, oht_id) -> int:
+		key = self.rk_pop_list[pop_id][job_id][oht_id]
+		if key[0] == key[1] == key[2]:
+			return np.random.randint(0, 3)
+		elif key[0] == key[1] and key[0] > key[2]:
+			return np.random.randint(0, 2)
+		elif key[1] == key[2] and key[1] > key[0]:
+			return np.random.randint(1, 3)
+		elif key[0] == key[2] and key[2] > key[1]:
+			return np.random.choice([0, 2])
+		else:
+			return np.argmax(key)
+ 
+	def cal_makespan(self, pop_id, pop): # fitness
 		# print("pop: ", pop)
 		agent_time = [0 for _ in range(self.num_agent)]
 		job_time = [0 for _ in range(self.num_job)]
@@ -118,14 +132,19 @@ class GASolver():
 		agent_POS = {
 			"LH": self.POS["LH"],
 			"RH": self.POS["RH"],
-			"BOT": self.POS["BOT"],
+			"BOT": self.POS["BOT"]
 		}
 		for job_id in pop: 
 			job_id = int(job_id)
+   
 			# get the allocated agent
-			agent = int(self.alloc_per_job[job_id][oht_cnt_per_job[job_id]])
+			agent = self.decide_agent(pop_id, job_id, oht_cnt_per_job[job_id])
+			self.alloc_per_job[job_id][oht_cnt_per_job[job_id]] = agent
+			# print(agent)
+   
 			# get the task to do
 			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
+   
 			# get process time from composed therbligs
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
 			
@@ -169,7 +188,7 @@ class GASolver():
 			p = np.random.choice(len(parent), 2, replace=False)
 			parent_1, parent_2 = parent[p[0]], parent[p[1]]
 			child = [copy.deepcopy(parent_1), copy.deepcopy(parent_2)]
-			cutpoint=list(np.random.choice(self.num_gene, 2, replace=False))
+			cutpoint=list(np.random.choice(self.num_oht, 2, replace=False))
 			cutpoint.sort()
 		
 			child[0][cutpoint[0]:cutpoint[1]] = parent_2[cutpoint[0]:cutpoint[1]]
@@ -178,7 +197,7 @@ class GASolver():
 			# Mutation
 			for c in child:
 				if self.mutation_rate >= np.random.rand():
-					mutation_pos=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
+					mutation_pos=list(np.random.choice(self.num_oht, self.num_mutation_pos, replace=False)) # chooses the position to mutation
 					tmp = c[mutation_pos[0]] # save the value which is on the first mutation position
 					for i in range(self.num_mutation_pos-1):
 						c[mutation_pos[i]] = c[mutation_pos[i+1]] # displacement
@@ -186,12 +205,15 @@ class GASolver():
 					c[mutation_pos[self.num_mutation_pos-1]] = tmp # move the value of the first mutation position to the last mutation position
 				offspring.append(copy.deepcopy(c))
 		return offspring
- 
+
+	def randomKeyCrossover(self, pop_id, parent):
+		return None 
+
 	def mutation(self):
 		for m in range(len(self.offspring_list)):
 			mutation_prob = np.random.rand()
 			if self.mutation_rate >= mutation_prob:
-				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
+				m_chg=list(np.random.choice(self.num_oht, self.num_mutation_pos, replace=False)) # chooses the position to mutation
 				t_value_last=self.offspring_list[m][m_chg[0]] # save the value which is on the first mutation position
 				for i in range(self.num_mutation_pos-1):
 					self.offspring_list[m][m_chg[i]]=self.offspring_list[m][m_chg[i+1]] # displacement
@@ -268,13 +290,17 @@ class GASolver():
 		job_time = [0 for _ in range(self.num_job)]
 		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
 		oht_dict = {}
+		print(self.alloc_per_job_best)
+		input()
 		for job_id in self.sequence_best: 
       
 			job_id = int(job_id)
+   
+			oht_id_per_job = oht_cnt_per_job[job_id]
+			oht = self.oht_list_per_job[job_id][oht_id_per_job]
 
-			agent = int(self.alloc_per_job_best[job_id][oht_cnt_per_job[job_id]])
-	
-			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
+			agent = self.alloc_per_job_best[job_id][oht_id_per_job]
+			
    
 			agent_POS = {
 				"LH": self.POS["LH"],
@@ -296,17 +322,19 @@ class GASolver():
 			# end_time = j_count[i]
 			# print("e:", end_time)
 				
-			oht_dict[(job_id, oht_cnt_per_job[job_id], agent)] = [start_time, end_time]
+			oht_dict[(job_id, oht_id_per_job, agent)] = [start_time, end_time]
+			# print(f"[{job_id}, {oht_id_per_job}, {agent}] = [{start_time}, {end_time}]")
 			
 			oht_cnt_per_job[job_id] += 1
 			
 		tmp = []
-		for job_id, agent_seq in enumerate(self.alloc_per_job_best):
-			for i, a in enumerate(agent_seq):
+		for job_id, oht_list in enumerate(self.oht_list_per_job):
+			for oht_id_per_job in range(len(oht_list)):
+				agent = self.alloc_per_job_best[job_id][oht_id_per_job]
 				tmp.append(dict(
-        			Task = f'{AGENT[a]}', 
-           			Start = f'2024-07-14 {(str(oht_dict[(job_id, i, a)][0]))}', 
-              		Finish = f'2024-07-14 {(str(oht_dict[(job_id, i, a)][1]))}',
+        			Task = f'{AGENT[agent]}', 
+           			Start = f'2024-07-14 {(str(oht_dict[(job_id, oht_id_per_job, agent)][0]))}', 
+              		Finish = f'2024-07-14 {(str(oht_dict[(job_id, oht_id_per_job, agent)][1]))}',
                 	Resource =f'Job{job_id}')
                	)
 			# for j in j_keys:
