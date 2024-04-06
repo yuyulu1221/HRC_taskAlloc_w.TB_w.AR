@@ -128,6 +128,7 @@ class OHT(object):
         self.in_edge = []
         self.out_edge = []
         self.bind_edge = []
+        self.end_time = -1
             
     def __repr__(self):
         return "(" + ", ".join(map(str, self.tb_list)) + ")"

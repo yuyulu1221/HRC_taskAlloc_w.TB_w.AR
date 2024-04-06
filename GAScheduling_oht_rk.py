@@ -88,32 +88,53 @@ class GASolver():
 			self.replacement(offspring, fit)
 			self.progress_bar(it)
 		print("\n")
-		self.gantt_chart()
+		# self.gantt_chart()
+  
+	def test(self):
+		self.init_pop()
+		for it in range(self.num_iter):
+			self.Tbest_now = 999999999
+			parent = self.selection()
+			offspring = self.twoPtCrossover(parent) # with mutation
+			offspring, fit = self.repairment_test(offspring)
+			self.replacement(offspring, fit)
+			self.progress_bar(it)
+		print("\n")
+  
    
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
 		tmp = list(np.random.permutation(self.num_oht))
 		for i in range(self.pop_size):	
-			nxm_random_num = list(np.random.permutation(tmp)) # generate a random permutation of 0 to num_job*num_mc-1
-			self.repairment_test(nxm_random_num)
-			self.pop_list.append(nxm_random_num) # add to the population_list
-			self.rk_pop_list.append([np.random.normal(0.5, 0.166) for _ in range(3)])
+			pop = list(np.random.permutation(tmp)) # generate a random permutation of 0 to num_job*num_mc-1
+			self.repairment_test(pop)
+			self.pop_list.append(pop) # add to the population_list
+			self.rk_pop_list.append([[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)])
 			self.pop_fit.append(self.cal_makespan(i, self.pop_list[i]))
 		# print(self.pop_list)
 
 	def repairment_test(self, oht_seq):
 		oht_in_edge = copy.deepcopy(self.OHT_in_edge)
 		key = {}
+		is_scheduled = np.zeros(self.num_oht)
 		for i in range(len(oht_seq)):
+			if key.get(oht_seq[i]):
+				oht_seq[i] = key[oht_seq[i]]
 			if len(oht_in_edge[oht_seq[i]]) != 0:
-				k = np.random.choice(oht_in_edge[oht_seq[i]])
-				oht_seq[i] = k
-				key[k] = oht_seq[i]
-				oht_in_edge[oht_seq[i]].remove(k)
+				for ie in oht_in_edge[oht_seq[i]]:
+					if is_scheduled[ie] == 1:
+						oht_in_edge[oht_seq[i]].remove(ie)
+				if len(oht_in_edge[oht_seq[i]]) != 0:
+					k = np.random.choice(oht_in_edge[oht_seq[i]])
+					key[k] = oht_seq[i]
+					oht_in_edge[oht_seq[i]].remove(k)
+					oht_seq[i] = k
+			is_scheduled[oht_seq[i]] = 1
+		# print(oht_seq)
 				
  
-	def decide_agent(self, pop_id, job_id, oht_id) -> int:
-		key = self.rk_pop_list[pop_id][job_id][oht_id]
+	def decide_agent(self, pop_id, oht_id) -> int:
+		key = self.rk_pop_list[pop_id][oht_id]
 		if key[0] == key[1] == key[2]:
 			return np.random.randint(0, 3)
 		elif key[0] == key[1] and key[0] > key[2]:
@@ -125,7 +146,30 @@ class GASolver():
 		else:
 			return np.argmax(key)
  
-	def cal_makespan(self, pop_id, pop): # fitness
+	def cal_makespan(self, pop_id, pop):
+		agent_time = [0 for _ in range(self.num_agent)]
+		agent_POS = {
+			"LH": self.POS["LH"],
+			"RH": self.POS["RH"],
+			"BOT": self.POS["BOT"]
+		}
+		for oht_id in pop:
+			agent = self.decide_agent(pop_id, oht_id)
+			self.alloc_res[oht_id] = agent
+			oht = self.oht_list[oht_id]
+			# print(oht)
+			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
+			if self.OHT_in_edge[oht_id]:
+				end_time = max(agent_time[agent], max(self.oht_list[i].end_time for i in self.OHT_in_edge[oht_id])) + process_time
+			else:
+				end_time = agent_time[agent] + process_time
+			agent_time[agent] = end_time
+			self.oht_list[oht_id].end_time = end_time
+
+		makespan = max(agent_time)
+		return makespan
+   
+	def cal_makespan_job(self, pop_id, pop): # fitness
 		# print("pop: ", pop)
 		agent_time = [0 for _ in range(self.num_agent)]
 		job_time = [0 for _ in range(self.num_job)]
@@ -167,7 +211,7 @@ class GASolver():
 		total_fit = 0
 		# print(self.pop_list)
 		for i in range(self.pop_size):
-			self.pop_fit[i] = self.cal_makespan(self.pop_list[i])
+			self.pop_fit[i] = self.cal_makespan(i, self.pop_list[i])
 			total_fit += self.pop_fit[i]
 		# print(self.pop_fit)
 		cumulate_prop.append(self.pop_fit[0])
@@ -251,7 +295,7 @@ class GASolver():
      
 			# print("child_after: ", child)
 			# input()
-			fit.append(self.cal_makespan(child))
+			fit.append(self.cal_makespan_job(child))
 			
 		return offspring, fit
 	
@@ -350,5 +394,5 @@ class GASolver():
 		fig.update_yaxes(autorange="reversed")
 		fig.show()
   
-# solver = GASolver()
+# solver = GASolver([1,0,2])
 # solver.run()
