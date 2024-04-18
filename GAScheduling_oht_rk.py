@@ -154,6 +154,7 @@ class GASolver():
 				oht_todo = find_prev_oht(oht_list[id])
 				output.append(oht_todo.id)
 				swap_check[oht_todo.id] = id
+				print(str(oht_todo.id) + " -> " + str(id))
 				is_scheduled[oht_todo.id] = 1
 				del oht_todo
 		print(output)
