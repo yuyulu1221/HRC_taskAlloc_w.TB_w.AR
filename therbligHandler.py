@@ -125,14 +125,23 @@ class RawTherbligList(object):
 class OHT(object):
     def __init__(self, ls:list):
         self.tb_list = ls
-        self.in_edge = []
-        self.out_edge = []
-        self.bind_edge = []
+        self.next = []
+        self.prev = []
+        self.bind = []
         self.end_time = -1
             
     def __repr__(self):
         return "(" + ", ".join(map(str, self.tb_list)) + ")"
         # return "[OHT]"
+    
+    def set_id(self, id):
+        self.id = id
+    
+    def add_next(self, n):
+        self.next.append(n)
+    
+    def add_prev(self, p):
+        self.prev.append(p)
     
     def get_oht_time(self, agent, agent_pos, pos, mtm):
         # print("????")
@@ -175,15 +184,22 @@ class TBHandler(object):
                         # self.list.append(tmp.copy())
                         self.OHT_list.append(OHT(tmp.copy()))
                         tmp.clear()
+        # Use dummy node to represent "END"
+        self.OHT_list.append(OHT([]))
                         
     def get_oht_time(self, oht_id, Pos):
         self.OHT_list[oht_id].get_oht_time(Pos)
-            
+           
+    def set_oht_id(self):
+        for id, oht in enumerate(self.OHT_list):
+            oht.set_id(id)
+     
     def run(self):
         # self.save_pos()
         self.save_tbs()
         self.read_tbs()
         # self.create_OHT()
+        self.set_oht_id()
         print(self.OHT_list)
 
 

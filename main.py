@@ -13,11 +13,11 @@ oht_list_per_job = []
 # 	oht_list_per_job[i % num_job].append(copy.deepcopy(oht))
 
 
-oht_list_per_job.append(tbh.OHT_list)
+# oht_list_per_job.append(tbh.OHT_list)
 # oht_list_per_job.append(tbh.OHT_list[4:5])
 # oht_list_per_job.append(tbh.OHT_list[2:])
  
-print(oht_list_per_job)
+# print(oht_list_per_job)
 
 solver = GASolver(tbh.OHT_list)
 

@@ -24,19 +24,30 @@ def read_MTM():
 	mtm_df = pd.read_excel("data.xlsx", sheet_name="Therblig Process Time", index_col=0)
 	return mtm_df
 
-def read_OHT_relation():
+#%% read OHT relation
+def read_OHT_relation(oht_list):
 	ohtr_df = pd.read_excel("data.xlsx", sheet_name="OHT Relation", index_col=0)
 	print(ohtr_df)
-	OHT_in_edge = []
-	OHT_bind = {}
-	for row_id in range(0, ohtr_df.shape[0]):
-		tmp = []
-		for col_id in range(0, ohtr_df.shape[1]):
+	for row_id in range(ohtr_df.shape[0]):
+		for col_id in range(ohtr_df.shape[1]):
 			if ohtr_df.iloc[row_id][col_id] == -1:
-				tmp.append(col_id)
-		OHT_in_edge.append(tmp)
-	print(OHT_in_edge)
-	return OHT_in_edge
+				oht_list[row_id].prev.append(oht_list[col_id])
+			elif ohtr_df.iloc[row_id][col_id] == 1:
+				oht_list[row_id].next.append(oht_list[col_id])
+	return oht_list
+
+#%% OHT structure
+class OHTNode:
+	def __init__(self, val):
+		self.val = val
+		self.next = []
+		self.prev = []
+  
+	def add_next(self, n):
+		self.next.append(n)
+	
+	def set_parent(self, p):
+		self.prev.append(p)
 
 #%% GASolver
 class GASolver():
@@ -50,9 +61,10 @@ class GASolver():
 		# Get MTM dataframe
 		self.MTM = read_MTM()
 		# Get OHT relation
-		self.OHT_in_edge = read_OHT_relation()
+		# self.OHT_in_edge = read_OHT_relation()
+		self.oht_list = read_OHT_relation(oht_list)
 
-		self.oht_list = oht_list
+		
 		self.num_oht = len(oht_list)
   
 		self.alloc_random_key = [[0.5, 0.5, 0.5] for _ in range(self.num_oht)]
@@ -114,23 +126,68 @@ class GASolver():
 		# print(self.pop_list)
 
 	def repairment_test(self, oht_seq):
-		oht_in_edge = copy.deepcopy(self.OHT_in_edge)
-		key = {}
-		is_scheduled = np.zeros(self.num_oht)
-		for i in range(len(oht_seq)):
-			if key.get(oht_seq[i]):
-				oht_seq[i] = key[oht_seq[i]]
-			if len(oht_in_edge[oht_seq[i]]) != 0:
-				for ie in oht_in_edge[oht_seq[i]]:
-					if is_scheduled[ie] == 1:
-						oht_in_edge[oht_seq[i]].remove(ie)
-				if len(oht_in_edge[oht_seq[i]]) != 0:
-					k = np.random.choice(oht_in_edge[oht_seq[i]])
-					key[k] = oht_seq[i]
-					oht_in_edge[oht_seq[i]].remove(k)
-					oht_seq[i] = k
-			is_scheduled[oht_seq[i]] = 1
-		# print(oht_seq)
+		print(oht_seq)
+		output = []
+		oht_list = copy.deepcopy(self.oht_list)
+		is_scheduled = np.zeros(len(self.oht_list))
+		swap_check = {}
+   
+		def find_prev_oht(oht: OHT):
+			if oht.prev:
+				can_choose = []
+				for oht in oht.prev:
+					if is_scheduled[oht.id] == 0:
+						can_choose.append(oht)
+				return find_prev_oht(np.random.choice(can_choose))
+			else:
+				return oht
+   
+		for id in oht_seq:
+			if is_scheduled[id] == 1:
+				id = swap_check[id]
+			print(id)
+			if not oht_list[id].prev:
+				output.append(id)
+				is_scheduled[id] = 1
+				del oht_list[id]
+			else:
+				oht_todo = find_prev_oht(oht_list[id])
+				output.append(oht_todo.id)
+				swap_check[oht_todo.id] = id
+				is_scheduled[oht_todo.id] = 1
+				del oht_todo
+		print(output)
+		input()
+		return output
+		# oht_in_edge = copy.deepcopy(self.OHT_in_edge)
+		# key = {}
+		# is_scheduled = np.zeros(self.num_oht)
+		# res = []
+		# temp = []
+  
+		# 
+  
+		# for oht_id in oht_seq:
+		# 	if len(oht_in_edge[oht_id]) == 0:
+		# 		res.append(oht_id)
+		# 	else:
+		# 		pass
+				
+  
+		# for i in range(len(oht_seq)):
+		# 	if key.get(oht_seq[i]):
+		# 		oht_seq[i] = key[oht_seq[i]]
+		# 	if len(oht_in_edge[oht_seq[i]]) != 0:
+		# 		for ie in oht_in_edge[oht_seq[i]]:
+		# 			if is_scheduled[ie] == 1:
+		# 				oht_in_edge[oht_seq[i]].remove(ie)
+		# 		if len(oht_in_edge[oht_seq[i]]) != 0:
+		# 			k = np.random.choice(oht_in_edge[oht_seq[i]])
+		# 			key[k] = oht_seq[i]
+		# 			oht_in_edge[oht_seq[i]].remove(k)
+		# 			oht_seq[i] = k
+		# 	is_scheduled[oht_seq[i]] = 1
+		# # print(oht_seq)
 				
  
 	def decide_agent(self, pop_id, oht_id) -> int:
