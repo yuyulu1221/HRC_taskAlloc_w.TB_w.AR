@@ -12,7 +12,7 @@ tb_abbr = {
     "A": "Assemble",
     "DA": "Disassemble",
     "P": "Position",
-    "H": "Hold",
+    "H": "Hold"
 }
 
 # analyze_res = {
@@ -70,36 +70,7 @@ class Therblig(object):
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
         else:
             return MTM.at[self.name, AGENT[agent]]
-            
 
-#%% 動素序列(Linked-List)
-# class TherbligLinkedList(object):
-#     def __init__(self):
-#         self.head = None
-        
-#     def __str__(self):
-#         ptr = self.head
-#         if ptr == None:
-#             return "Empty"
-#         ret = ptr.type
-#         ptr = ptr.next
-#         while ptr != None:
-#             ret = ret + ", " + ptr.type
-#             ptr = ptr.next
-#         return ret
-        
-#     def set_head(self, tb):
-#         self.head = tb
-        
-#     def read(self, df:pd.DataFrame):
-#         for idx, row in df.iterrows():
-#             therblig = Therblig(row["Type"], Pos[row["From"]], Pos[row["To"]], row["Obj1"], row["Obj2"])
-#             if self.head == None:
-#                 self.head = copy.copy(therblig)
-#                 self.ptr = self.head
-#             else:
-#                 self.ptr.next = copy.copy(therblig)
-#                 self.ptr = self.ptr.next
 #%% 動素序列
 class RawTherbligList(object):
     def __init__(self, Pos):
@@ -124,15 +95,17 @@ class RawTherbligList(object):
 #%% 單手任務
 class OHT(object):
     def __init__(self, ls:list):
+        self.id = -1
         self.tb_list = ls
         self.next = []
         self.prev = []
         self.bind = []
+        self.is_scheduled = False
         self.end_time = -1
             
     def __repr__(self):
-        return "(" + ", ".join(map(str, self.tb_list)) + ")"
-        # return "[OHT]"
+        # return "(" + ", ".join(map(str, self.tb_list)) + ")"
+        return f"OHT{self.id}"
     
     def set_id(self, id):
         self.id = id
@@ -193,6 +166,8 @@ class TBHandler(object):
     def set_oht_id(self):
         for id, oht in enumerate(self.OHT_list):
             oht.set_id(id)
+        for oht in self.OHT_list:
+            print("id: ", oht.id)
      
     def run(self):
         # self.save_pos()
