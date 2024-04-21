@@ -5,11 +5,8 @@ import numpy as np
 import time
 import copy
 import plotly.express as px
-import datetime
 from datetime import timedelta
 
-from sympy import Q
-import therbligHandler as tbh
 from therbligHandler import *
 # from InfoHandler import *
 
@@ -114,10 +111,10 @@ class GASolver():
 			parent, rk_parent = self.selection()
 			offspring = self.maskCrossover(parent) # with mutation
 			rk_offspring = self.randomKeyCrossover(rk_parent)
-			# print("mask_crossover: ", offspring)
 			self.replacement(offspring, rk_offspring)
 			self.progress_bar(it)
 		print("\n")
+		self.gantt_chart()
   
    
 	def init_pop(self) -> None:
@@ -130,49 +127,6 @@ class GASolver():
 			self.rk_pop_list.append([[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)])
 			self.pop_fit.append(self.cal_makespan(self.pop_list[i], self.rk_pop_list[i]))
 		# print(self.pop_list)
-
-	def relation_repairment(self, oht_seq):
-		# print(oht_seq)
-		output = []
-		oht_list = copy.deepcopy(self.oht_list)
-		swap_check = {}
-   
-		def find_prev_oht(oht: OHT):
-			# print("find oht ", oht.id)
-			if oht.prev:
-				can_choose = []
-				for oht_p in oht.prev:
-					if oht_p.is_scheduled == False:
-						can_choose.append(oht_p)
-				if can_choose:
-					return find_prev_oht(np.random.choice(can_choose))
-				else:
-					# print("nothing can choose")
-					return oht.id
-			else:
-				# print("no prev")
-				return oht.id
-   
-		for id in oht_seq:
-			# print(f"oht_list: {oht_list}")
-			if oht_list[id].is_scheduled == True:
-				while swap_check.get(id):
-					id = swap_check[id]
-			# print("id: ", id)
-			if not oht_list[id].prev:
-				output.append(id)
-				oht_list[id].is_scheduled = True
-			else:
-				oht_id = find_prev_oht(oht_list[id])
-				output.append(oht_id)
-				oht_list[oht_id].is_scheduled = True
-				if oht_id != id:
-					swap_check[oht_id] = id
-					# print(str(oht_id) + " -> " + str(id))
-				# is_scheduled[oht_todo.id] = 1
-		# print(f"output: {output}")
-		# input()
-		return output	
  
 	def decide_agent(self, key) -> int:
 		if key[0] == key[1] == key[2]:
@@ -186,62 +140,36 @@ class GASolver():
 		else:
 			return np.argmax(key)
  
-	def cal_makespan(self, pop, rk_pop):
+	def cal_makespan(self, pop:list, rk_pop:list):
 		agent_time = [0 for _ in range(self.num_agent)]
+		agent_oht_id = [[] for _ in range(self.num_agent)]
 		agent_POS = {
 			"LH": self.POS["LH"],
 			"RH": self.POS["RH"],
 			"BOT": self.POS["BOT"]
 		}
+		oht_end_time = np.zeros(self.num_oht)
 		for oht_id in pop:
 			agent = self.decide_agent(rk_pop[oht_id])
 			self.alloc_res[oht_id] = agent
 			oht = self.oht_list[oht_id]
 			# print(oht)
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			if self.oht_list[oht_id]:
+			if self.oht_list[oht_id].prev:
 				# oht start time should be bigger than every previous oht
-				job_time = max(oht_prev.end_time for oht_prev in self.oht_list[oht_id].prev) if self.oht_list[oht_id].prev else 0
+				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				end_time = max(agent_time[agent], job_time) + process_time
 			else:
 				end_time = agent_time[agent] + process_time
+			agent_oht_id[agent].append(oht_id)
 			agent_time[agent] = end_time
-			self.oht_list[oht_id].end_time = end_time
+			oht_end_time[oht_id] = end_time
 
 		makespan = max(agent_time)
-		return makespan
-   
-	def cal_makespan_job(self, pop_id, pop): # fitness
-		# print("pop: ", pop)
-		agent_time = [0 for _ in range(self.num_agent)]
-		job_time = [0 for _ in range(self.num_job)]
-		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
-		agent_POS = {
-			"LH": self.POS["LH"],
-			"RH": self.POS["RH"],
-			"BOT": self.POS["BOT"]
-		}
-		for job_id in pop: 
-			job_id = int(job_id)
-   
-			# get the allocated agent
-			agent = self.decide_agent(pop_id, job_id, oht_cnt_per_job[job_id])
-			self.alloc_per_job[job_id][oht_cnt_per_job[job_id]] = agent
-			# print(agent)
-   
-			# get the task to do
-			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
-   
-			# get process time from composed therbligs
-			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			
-   			# TODO: Different condition with task sequence
-			end_time = max(agent_time[agent], job_time[job_id]) + process_time
-			agent_time[agent] = end_time
-			job_time[job_id] = end_time
-			oht_cnt_per_job[job_id] += 1
-   
-		makespan = max(agent_time)
+  
+		# lower the oht random key of the highest makespan
+		for oht_id in agent_oht_id[np.argmax(agent_time)]:
+			rk_pop[oht_id][agent] -= 0.01
 		return makespan
    
 	def selection(self):
@@ -357,35 +285,48 @@ class GASolver():
 				diff_list[child[i]] += 1
 				child[i] = insufficient_job.pop()
     
-	# def repairment(self, offspring):
-	# 	"""
-	# 	Fix offspring to be feasible solution
-	# 	"""
-	# 	fit = []
-	# 	for child in offspring:
-	# 		job_cnt = [0 for _ in range(self.num_job)]
-	# 		insufficient_job = []
-	# 		diff_list = []
-	# 		for job_id in child:
-	# 			job_cnt[job_id] += 1
-	# 		for i in range(self.num_job):
-	# 			diff = self.num_oht_per_job[i] - job_cnt[i]
-	# 			if diff > 0:
-	# 				insufficient_job += [i] * diff
-	# 			diff_list.append(diff)
-
-	# 		insufficient_job = list(np.random.permutation(insufficient_job))
-	# 		for i in range(len(child)):
-	# 			# replace insufficient job with insufficient job
-	# 			if diff_list[child[i]] < 0:
-	# 				diff_list[child[i]] += 1
-	# 				child[i] = insufficient_job.pop()
-     
-	# 		# print("child_after: ", child)
-	# 		# input()
-	# 		fit.append(self.cal_makespan_job(child))
-			
-	# 	return offspring, fit
+	def relation_repairment(self, oht_seq):
+		# print(oht_seq)
+		output = []
+		oht_list = copy.deepcopy(self.oht_list)
+		swap_check = {}
+   
+		def find_prev_oht(oht: OHT):
+			# print("find oht ", oht.id)
+			if oht.prev:
+				can_choose = []
+				for oht_p in oht.prev:
+					if oht_p.is_scheduled == False:
+						can_choose.append(oht_p)
+				if can_choose:
+					return find_prev_oht(np.random.choice(can_choose))
+				else:
+					# print("nothing can choose")
+					return oht.id
+			else:
+				# print("no prev")
+				return oht.id
+   
+		for id in oht_seq:
+			# print(f"oht_list: {oht_list}")
+			if oht_list[id].is_scheduled == True:
+				while swap_check.get(id):
+					id = swap_check[id]
+			# print("id: ", id)
+			if not oht_list[id].prev:
+				output.append(id)
+				oht_list[id].is_scheduled = True
+			else:
+				oht_id = find_prev_oht(oht_list[id])
+				output.append(oht_id)
+				oht_list[oht_id].is_scheduled = True
+				if oht_id != id:
+					swap_check[oht_id] = id
+					# print(str(oht_id) + " -> " + str(id))
+				# is_scheduled[oht_todo.id] = 1
+		# print(f"output: {output}")
+		# input()
+		return output	
 
 	def replacement(self, offspring, rk_offspring):
      
@@ -407,10 +348,12 @@ class GASolver():
 		
 		self.Tbest_now = self.pop_fit[0]
 		sequence_now = copy.deepcopy(self.pop_list[0])
+		random_key_now = copy.deepcopy(self.rk_pop_list[0])
 
 		if self.Tbest_now < self.Tbest:
 			self.Tbest = self.Tbest_now
 			self.sequence_best = copy.deepcopy(sequence_now)
+			self.random_key_best = copy.deepcopy(random_key_now)
    
 		# self.makespan_rec.append(self.Tbest)
    
@@ -422,66 +365,44 @@ class GASolver():
 		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_now = {self.Tbest_now}, T-best = {self.Tbest}", end="")
    
 	def gantt_chart(self):
+     
 		agent_time = [0 for _ in range(self.num_agent)]
-		job_time = [0 for _ in range(self.num_job)]
-		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
-		oht_dict = {}
-		print(self.alloc_per_job_best)
-		input()
-		for job_id in self.sequence_best: 
-      
-			job_id = int(job_id)
-   
-			oht_id_per_job = oht_cnt_per_job[job_id]
-			oht = self.oht_list_per_job[job_id][oht_id_per_job]
-
-			agent = self.alloc_per_job_best[job_id][oht_id_per_job]
-			
-   
-			agent_POS = {
-				"LH": self.POS["LH"],
-				"RH": self.POS["RH"],
-				"BOT": self.POS["BOT"],
-			}
-   
-			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			# print("job_id: ", job_id)		
-			end_time = max(agent_time[agent], job_time[job_id]) + process_time
-			agent_time[agent] = end_time
-			job_time[job_id] = end_time
-
-			start_time = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
-			# start_time = j_count[i] - self.process_t[i][key_count[i]]
-			# print("s: ", start_time)
-			
-			end_time = str(timedelta(seconds = end_time))
-			# end_time = j_count[i]
-			# print("e:", end_time)
-				
-			oht_dict[(job_id, oht_id_per_job, agent)] = [start_time, end_time]
-			# print(f"[{job_id}, {oht_id_per_job}, {agent}] = [{start_time}, {end_time}]")
-			
-			oht_cnt_per_job[job_id] += 1
-			
+		agent_POS = {
+			"LH": self.POS["LH"],
+			"RH": self.POS["RH"],
+			"BOT": self.POS["BOT"]
+		}
 		tmp = []
-		for job_id, oht_list in enumerate(self.oht_list_per_job):
-			for oht_id_per_job in range(len(oht_list)):
-				agent = self.alloc_per_job_best[job_id][oht_id_per_job]
-				tmp.append(dict(
+		oht_end_time = np.zeros(self.num_oht)
+		for oht_id in self.sequence_best[:-1]: # not showing END node
+			agent = self.decide_agent(self.random_key_best[oht_id])
+			# self.alloc_res[oht_id] = agent
+			oht = self.oht_list[oht_id]
+			print(f"agent: {AGENT[agent]}")
+			print(f"OHT: #{oht.id}")
+			# print(oht)
+			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
+			if self.oht_list[oht_id].prev:
+				# oht start time should be bigger than every previous oht
+				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev) 
+				end_time = max(agent_time[agent], job_time) + process_time
+			else:
+				end_time = agent_time[agent] + process_time
+			agent_time[agent] = end_time
+			oht_end_time[oht_id] = end_time
+   
+			start_time = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
+			end_time = str(timedelta(seconds = end_time))
+			tmp.append(dict(
         			Task = f'{AGENT[agent]}', 
-           			Start = f'2024-07-14 {(str(oht_dict[(job_id, oht_id_per_job, agent)][0]))}', 
-              		Finish = f'2024-07-14 {(str(oht_dict[(job_id, oht_id_per_job, agent)][1]))}',
-                	Resource =f'Job{job_id}')
-               	)
-			# for j in j_keys:
-				# df.append(dict(Task=f'Machine {m}', Start=j_record[(j,m)][0], Finish=j_record[(j,m)][1]*1000, Resource=f'Job {j+1}'))
+           			Start = f'2024-04-21 {(str(start_time))}', 
+            		Finish = f'2024-04-21 {(str(end_time))}',
+            		Resource =f'OHT{oht_id}')
+            	)
 		
 		df = pd.DataFrame(tmp)
 
-		# fig = px.timeline(df, index_col='Resource', show_colorbar=True, group_tasks=True, showgrid_x=True, title='Job shop Schedule')
-		# py.iplot(fig, filename='GA_job_shop_scheduling', world_readable=True)
-
-		fig = px.timeline(df, x_start='Start', x_end='Finish', y='Task', color='Resource', title='Job shop Schedule')
+		fig = px.timeline(df, x_start='Start', x_end='Finish', y='Task', color='Resource', title='Schedule')
 		fig.update_yaxes(autorange="reversed")
 		fig.show()
   

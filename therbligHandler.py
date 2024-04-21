@@ -101,7 +101,6 @@ class OHT(object):
         self.prev = []
         self.bind = []
         self.is_scheduled = False
-        self.end_time = -1
             
     def __repr__(self):
         # return "(" + ", ".join(map(str, self.tb_list)) + ")"
