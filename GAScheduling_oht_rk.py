@@ -7,6 +7,8 @@ import copy
 import plotly.express as px
 from datetime import timedelta
 
+from pyparsing import col
+
 from therbligHandler import *
 # from InfoHandler import *
 
@@ -27,35 +29,23 @@ def read_MTM():
 def read_OHT_relation(oht_list):
 	ohtr_df = pd.read_excel("data.xlsx", sheet_name="OHT Relation", index_col=0)
 	print(ohtr_df)
+ 
 	for row_id in range(ohtr_df.shape[0]):
 		for col_id in range(ohtr_df.shape[1]):
 			if ohtr_df.iloc[row_id][col_id] == -1:
 				oht_list[row_id].prev.append(oht_list[col_id])
 			elif ohtr_df.iloc[row_id][col_id] == 1:
 				oht_list[row_id].next.append(oht_list[col_id])
+			elif ohtr_df.iloc[row_id][col_id] == 2:
+				oht_list[row_id].bind = oht_list[col_id]
+    
 	return oht_list
-
-#%% OHT structure
-class OHTNode:
-	def __init__(self, val):
-		self.val = val
-		self.next = []
-		self.prev = []
-  
-	def add_next(self, n):
-		self.next.append(n)
-	
-	def set_parent(self, p):
-		self.prev.append(p)
 
 #%% GASolver
 class GASolver():
 	def __init__(self, oht_list):
-     
-		# pt_tmp = pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
-		# ms_tmp = pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
-
-		# Get position dict -> str: np.array_1x3
+		
+  		# Get position dict -> str: np.array_1x3
 		self.POS = read_POS()
 		# Get MTM dataframe
 		self.MTM = read_MTM()
@@ -68,6 +58,7 @@ class GASolver():
 			print(oht.next)
 
 		self.num_oht = len(oht_list)
+		# self.num_seq = 0
   
 		self.alloc_random_key = [[0.5, 0.5, 0.5] for _ in range(self.num_oht)]
 		self.alloc_res = [0 for _ in range(self.num_oht)]
@@ -91,20 +82,8 @@ class GASolver():
    
 		self.makespan_rec = []
 		self.start_time = time.time() # ? 
-    
-	def run(self):
-		self.init_pop()
-		for it in range(self.num_iter):
-			self.Tbest_now = 999999999
-			parent = self.selection()
-			offspring = self.twoPtCrossover(parent) # with mutation
-			offspring, fit = self.repairment(offspring)
-			self.replacement(offspring, fit)
-			self.progress_bar(it)
-		print("\n")
-		# self.gantt_chart()
   
-	def test(self):
+	def run(self):
 		self.init_pop()
 		for it in range(self.num_iter):
 			self.Tbest_now = 999999999
@@ -115,11 +94,12 @@ class GASolver():
 			self.progress_bar(it)
 		print("\n")
 		self.gantt_chart()
-  
    
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
-		tmp = list(np.random.permutation(self.num_oht))
+		# tmp = self.seq_generator()
+		tmp =  [i for i in range(self.num_oht)]
+		# self.num_seq = self.num_oht
 		for i in range(self.pop_size):	
 			pop = list(np.random.permutation(tmp)) # generate a random permutation of 0 to num_job*num_mc-1
 			pop = self.relation_repairment(pop)
@@ -127,6 +107,28 @@ class GASolver():
 			self.rk_pop_list.append([[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)])
 			self.pop_fit.append(self.cal_makespan(self.pop_list[i], self.rk_pop_list[i]))
 		# print(self.pop_list)
+  
+	# def seq_generator(self):
+	# 	seq = []
+	# 	self.tok_2_oht = {}
+	# 	self.oht_2_tok = {}
+	# 	binded = set()
+  
+	# 	for i in range(self.num_oht):
+	# 		if i in binded:
+	# 			binded.remove(i)
+	# 			continue
+	# 		if self.oht_list[i].bind == -1:
+	# 			seq.append(i)
+	# 		else:
+	# 			token = chr(i)
+	# 			seq.append(token)
+	# 			self.tok_2_oht[token] = (i, self.oht_list[i].bind.id)
+	# 			self.oht_2_tok[i] = token
+	# 			self.oht_2_tok[self.oht_list[i].bind.id] = token
+	# 			binded.add(self.oht_list[i].bind.id)
+	# 	self.num_seq = len(seq)
+	# 	return seq
  
 	def decide_agent(self, key) -> int:
 		if key[0] == key[1] == key[2]:
@@ -239,93 +241,60 @@ class GASolver():
 			child = (np.array(parent0) + np.array(parent1)) / 2
 			offspring.append(child)
 		return offspring
-
-	def twoPtCrossover(self, parent):
-		offspring = []
-		for _ in range(round(self.pop_size * self.crossover_rate / 2)):
-			p = np.random.choice(len(parent), 2, replace=False)
-			parent_1, parent_2 = parent[p[0]], parent[p[1]]
-			child = [copy.deepcopy(parent_1), copy.deepcopy(parent_2)]
-			cutpoint=list(np.random.choice(self.num_oht, 2, replace=False))
-			cutpoint.sort()
-		
-			child[0][cutpoint[0]:cutpoint[1]] = parent_2[cutpoint[0]:cutpoint[1]]
-			child[1][cutpoint[0]:cutpoint[1]] = parent_1[cutpoint[0]:cutpoint[1]]
-
-			# Mutation
-			for c in child:
-				if self.mutation_rate >= np.random.rand():
-					mutation_pos=list(np.random.choice(self.num_oht, self.num_mutation_pos, replace=False)) # chooses the position to mutation
-					tmp = c[mutation_pos[0]] # save the value which is on the first mutation position
-					for i in range(self.num_mutation_pos-1):
-						c[mutation_pos[i]] = c[mutation_pos[i+1]] # displacement
-					
-					c[mutation_pos[self.num_mutation_pos-1]] = tmp # move the value of the first mutation position to the last mutation position
-				c = self.show_repairment(c)
-				c = self.relation_repairment(c)
-				offspring.append(copy.deepcopy(c))
-		return offspring
-    
-	def show_repairment(self, child):
-		job_cnt = [0 for _ in range(self.num_oht)]
-		insufficient_job = []
-		diff_list = []
-		for job_id in child:
-			job_cnt[job_id] += 1
-		for i in range(self.num_job):
-			diff = self.num_oht_per_job[i] - job_cnt[i]
-			if diff > 0:
-				insufficient_job += [i] * diff
-			diff_list.append(diff)
-
-		insufficient_job = list(np.random.permutation(insufficient_job))
-		for i in range(len(child)):
-			# replace insufficient job with insufficient job
-			if diff_list[child[i]] < 0:
-				diff_list[child[i]] += 1
-				child[i] = insufficient_job.pop()
     
 	def relation_repairment(self, oht_seq):
-		# print(oht_seq)
 		output = []
 		oht_list = copy.deepcopy(self.oht_list)
-		swap_check = {}
+		is_scheduled = [False for _ in range(self.num_oht)]
+		swap = {}
    
 		def find_prev_oht(oht: OHT):
-			# print("find oht ", oht.id)
-			if oht.prev:
-				can_choose = []
-				for oht_p in oht.prev:
-					if oht_p.is_scheduled == False:
-						can_choose.append(oht_p)
-				if can_choose:
-					return find_prev_oht(np.random.choice(can_choose))
-				else:
-					# print("nothing can choose")
-					return oht.id
-			else:
-				# print("no prev")
+			if is_searched[oht.id]:
 				return oht.id
+			# print("find prev oht ", oht.id)
+			is_searched[oht.id] = True
+			if oht.prev:
+				can_choose = set()
+				for oht_p in oht.prev:
+					if is_scheduled[oht_p.id] == False:
+						can_choose.add(oht_p)
+				if can_choose:
+					return find_prev_oht(np.random.choice(list(can_choose)))
+				else:
+					return find_bind_oht(oht)
+			else:
+				return find_bind_oht(oht)
+
+		def find_bind_oht(oht: OHT):
+			# print("find bind oht ", oht.id)
+			if oht.bind == -1:
+				return oht.id
+			else:
+				return find_prev_oht(oht.bind)
    
 		for id in oht_seq:
-			# print(f"oht_list: {oht_list}")
-			if oht_list[id].is_scheduled == True:
-				while swap_check.get(id):
-					id = swap_check[id]
-			# print("id: ", id)
-			if not oht_list[id].prev:
-				output.append(id)
-				oht_list[id].is_scheduled = True
-			else:
-				oht_id = find_prev_oht(oht_list[id])
-				output.append(oht_id)
-				oht_list[oht_id].is_scheduled = True
-				if oht_id != id:
-					swap_check[oht_id] = id
-					# print(str(oht_id) + " -> " + str(id))
-				# is_scheduled[oht_todo.id] = 1
-		# print(f"output: {output}")
-		# input()
+   
+			while swap.get(id):
+				id = swap.pop(id)
+    
+			if is_scheduled[id] == True:
+				continue
+
+			is_searched = [False for _ in range(self.num_oht)]
+
+			todo_id = find_prev_oht(oht_list[id])
+   
+			output.append(todo_id)
+			is_scheduled[todo_id] = True
+			if oht_list[todo_id].bind != -1:
+				output.append(oht_list[todo_id].bind.id)
+				is_scheduled[oht_list[todo_id].bind.id] = True
+    
+			if todo_id != id:
+				swap[todo_id] = id
+ 
+			# print(f"swap: {swap}")
+			# print(f"output: {output}")
 		return output	
 
 	def replacement(self, offspring, rk_offspring):

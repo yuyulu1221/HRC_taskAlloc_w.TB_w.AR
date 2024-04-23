@@ -21,4 +21,4 @@ oht_list_per_job = []
 
 solver = GASolver(tbh.OHT_list)
 
-solver.test()
+solver.run()

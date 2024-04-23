@@ -93,14 +93,14 @@ class RawTherbligList(object):
 
 
 #%% 單手任務
-class OHT(object):
+class OHT:
     def __init__(self, ls:list):
         self.id = -1
         self.tb_list = ls
         self.next = []
         self.prev = []
-        self.bind = []
-        self.is_scheduled = False
+        self.bind = -1
+        # self.is_scheduled = False
             
     def __repr__(self):
         # return "(" + ", ".join(map(str, self.tb_list)) + ")"
@@ -122,6 +122,14 @@ class OHT(object):
             oht_t += tb.get_tb_time(agent, agent_pos, pos, mtm)
         return oht_t
     
+# class BindedOHT(OHT):
+#     def __init__(self, oht1, oht2):
+#         self.id = -1
+#         self.tb_list = [oht1.tb_list, oht2.tb_list]
+#         self.next = oht1.next + oht2.next
+#         self.prev = oht1.prev + oht2.prev
+#     def get_oht_time(self, agent, agent_pos, pos, mtm)
+        
 #%% TBHandler
 class TBHandler(object):
     def __init__(self):
