@@ -13,9 +13,11 @@ from pyparsing import col
 from therbligHandler import *
 # from InfoHandler import *
 
+data = "data2.xlsx"
+
 #%% read position
 def read_POS():
-	pos_df = pd.read_excel("data.xlsx", sheet_name="Position")
+	pos_df = pd.read_excel(data, sheet_name="Position")
 	Pos = {}
 	for idx, pos in pos_df.iterrows():
 		Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
@@ -23,12 +25,12 @@ def read_POS():
 
 #%% read MTM
 def read_MTM():
-	mtm_df = pd.read_excel("data.xlsx", sheet_name="Therblig Process Time", index_col=0)
+	mtm_df = pd.read_excel(data, sheet_name="Therblig Process Time", index_col=0)
 	return mtm_df
 
 #%% read OHT relation
 def read_OHT_relation(oht_list):
-	ohtr_df = pd.read_excel("data.xlsx", sheet_name="OHT Relation", index_col=0)
+	ohtr_df = pd.read_excel(data, sheet_name="OHT Relation", index_col=0)
 	print(ohtr_df)
  
 	for row_id in range(ohtr_df.shape[0]):
@@ -77,7 +79,8 @@ class GASolver():
 		self.crossover_rate = 0.8
 		# self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default: 0.2
 		self.mutation_rate = 0.2
-		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
+		# mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
+		mutation_selection_rate = 0.2
 		self.num_mutation_pos = round(self.num_gene / 4 * mutation_selection_rate)
 		self.num_iter=int(input('Please input number of iteration: ') or 200) # default: 2000
 			
@@ -336,7 +339,7 @@ class GASolver():
 		}
 		oht_end_time = np.zeros(self.num_oht)
 		bind_is_scheduled = False
-		bind_start_time = 0
+		bind_end_time = 0
 		for oht_id in pop:
 			agent = self.decide_agent(rk_pop[oht_id])
 			self.alloc_res[oht_id] = agent
@@ -344,22 +347,25 @@ class GASolver():
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
 
 			if bind_is_scheduled:
+				end_time = bind_end_time
 				bind_is_scheduled = False
-				end_time = bind_start_time + process_time
 			elif self.oht_list[oht_id].bind != -1:
 				bind_is_scheduled = True
 				job_time = 0
 				if self.oht_list[oht_id].prev:
 					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
+				end_time = max(agent_time[agent], job_time) + process_time
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
 				bind_agent = self.decide_agent(rk_pop[self.oht_list[oht_id].bind.id])
-				bind_start_time = max(agent_time[agent], agent_time[bind_agent], job_time, bind_job_time)
+				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
+				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
 				punishment = 0
 				if agent == bind_agent:
-					punishment = 1000000
-				end_time = bind_start_time + process_time + punishment
+					punishment = 10000
+				bind_end_time = max(end_time, bind_end_time) + punishment
+				end_time = max(end_time, bind_end_time) + punishment
 			elif self.oht_list[oht_id].prev:
 				# oht start time should be bigger than every previous oht
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
@@ -389,7 +395,7 @@ class GASolver():
 		tmp = []
 		oht_end_time = [0 for _ in range(self.num_oht)]
 		bind_is_scheduled = False
-		bind_start_time = 0
+		bind_end_time = 0
   
 		print(f"OHT sequence: ", self.sequence_best[:-1])
 		print(f"Random key: ", [AGENT[self.decide_agent(rkb)] for rkb in self.random_key_best][:-1])
@@ -399,21 +405,25 @@ class GASolver():
 			oht = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
 			if bind_is_scheduled:
+				end_time = bind_end_time
 				bind_is_scheduled = False
-				end_time = bind_start_time + process_time
 			elif self.oht_list[oht_id].bind != -1:
 				bind_is_scheduled = True
 				job_time = 0
 				if self.oht_list[oht_id].prev:
 					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
+				end_time = max(agent_time[agent], job_time) + process_time
 				bind_job_time = 0
-				bind_agent_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
 				bind_agent = self.decide_agent(self.random_key_best[self.oht_list[oht_id].bind.id])
-				bind_agent_time = agent_time[bind_agent]
-				bind_start_time = max(agent_time[agent], bind_agent_time, job_time, bind_job_time)
-				end_time = bind_start_time + process_time
+				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
+				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
+				punishment = 0
+				if agent == bind_agent:
+					punishment = 10000
+				bind_end_time = max(end_time, bind_end_time) + punishment
+				end_time = max(end_time, bind_end_time) + punishment
 			elif self.oht_list[oht_id].prev:
 				# oht start time should be bigger than every previous oht
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
@@ -426,7 +436,7 @@ class GASolver():
 			start_time = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
 			end_time = str(timedelta(seconds = end_time))
 			tmp.append(dict(
-        			Task = f'{AGENT[agent]}', 
+        			Agent = f'{AGENT[agent]}', 
            			Start = f'2024-04-24 {(str(start_time))}', 
             		Finish = f'2024-04-24 {(str(end_time))}',
             		Resource =f'OHT{oht_id}')
@@ -434,7 +444,18 @@ class GASolver():
 		
 		df = pd.DataFrame(tmp)
 
-		fig = px.timeline(df, x_start='Start', x_end='Finish', y='Task', color='Resource', title='Schedule')
+		fig = px.timeline(
+      		df,
+			x_start='Start', 
+			x_end='Finish', 
+			y='Agent', 
+			color='Resource', 
+			title='Schedule', 
+			color_discrete_sequence=px.colors.qualitative.Plotly + px.colors.qualitative.Pastel,
+			category_orders={
+				'Agent': ['BOT', 'RH', 'LH'],
+				'Resource': [f"OHT{i}" for i in range(self.num_oht - 1)]
+			})
 		fig.update_yaxes(autorange="reversed")
 		fig.show()
   

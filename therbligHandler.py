@@ -15,27 +15,6 @@ tb_abbr = {
     "H": "Hold"
 }
 
-# analyze_res = {
-#     "Type": ["TE", "G", "P", "RL", "TE", "G", "P", "RL"],
-#     "From": ["L", "-", "-", "-", "Pillar", "-", "-", "-"],
-#     "To": ["Pillar", "-", "-", "-", "BottomPlate", "-", "-", "-"],
-#     "Obj1": ["-", "Pillar", "Pillar", "-", "-", "Pillar", "Pillar", "-"],
-#     "Obj2": ["-", "-", "BottomPlate", "-", "-", "-", "BottomPlate", "-"]
-# }
- 
-# Pos = {
-#     "L": np.array([-0.2, 0, 0.1]),    
-#     "R": np.array([ 0.2, 0, 0.1]),
-#     "Bot": np.array([0, 0, 0.6]),
-#     "Pillar": np.array([-0.3, 0, 0.3]),
-#     "Bush": np.array([-0.2, 0, 0.3]),
-#     "TopPlate": np.array([-0.2, 0, 0.5]),
-#     "BottomPlate": np.array([-0.2, 0, 0.25]),
-#     "Done": np.array([0.3, 0, 0.4]),
-# }
-
-# Obj = ["Pillar", "Bush", "TopPlate", "BottomPlate"]
-
 AGENT = ["LH", "RH", "BOT"]
 
 
@@ -121,14 +100,6 @@ class OHT:
         for tb in self.tb_list:
             oht_t += tb.get_tb_time(agent, agent_pos, pos, mtm)
         return oht_t
-    
-# class BindedOHT(OHT):
-#     def __init__(self, oht1, oht2):
-#         self.id = -1
-#         self.tb_list = [oht1.tb_list, oht2.tb_list]
-#         self.next = oht1.next + oht2.next
-#         self.prev = oht1.prev + oht2.prev
-#     def get_oht_time(self, agent, agent_pos, pos, mtm)
         
 #%% TBHandler
 class TBHandler(object):
@@ -138,17 +109,17 @@ class TBHandler(object):
         self.tbsr:RawTherbligList
         self.OHT_list = []
     
-    # Save tbs by list
+    ## Save tbs by list
     def save_tbs(self):
         self.tbsl = RawTherbligList(self.Pos) # save pos
-        tbsl_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(L)")   
+        tbsl_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(L)")   
         self.tbsl.read(tbsl_df)
         
         self.tbsr = RawTherbligList(self.Pos)
-        tbsr_df = pd.read_excel("data.xlsx", sheet_name="Therbligs(R)")   
+        tbsr_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(R)")   
         self.tbsr.read(tbsr_df)
         
-    # Convert tbs to oht    
+    ## Convert tbs to oht    
     def read_tbs(self):
         for tbs in (self.tbsl, self.tbsr):
             if not isinstance(tbs, RawTherbligList):
@@ -177,10 +148,8 @@ class TBHandler(object):
             print("id: ", oht.id)
      
     def run(self):
-        # self.save_pos()
         self.save_tbs()
         self.read_tbs()
-        # self.create_OHT()
         self.set_oht_id()
         print(self.OHT_list)
 
