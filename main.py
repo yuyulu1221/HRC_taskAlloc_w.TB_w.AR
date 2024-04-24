@@ -19,7 +19,6 @@ oht_list_per_job = []
 # oht_list_per_job.append(tbh.OHT_list[2:])
  
 # print(oht_list_per_job)
-
 solver = GASolver(tbh.OHT_list)
 
 solver.run()

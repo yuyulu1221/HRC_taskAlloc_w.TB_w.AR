@@ -103,8 +103,8 @@ class OHT:
         # self.is_scheduled = False
             
     def __repr__(self):
-        # return "(" + ", ".join(map(str, self.tb_list)) + ")"
-        return f"OHT{self.id}"
+        return "(" + ", ".join(map(str, self.tb_list)) + ")"
+        # return f"OHT{self.id}"
     
     def set_id(self, id):
         self.id = id
