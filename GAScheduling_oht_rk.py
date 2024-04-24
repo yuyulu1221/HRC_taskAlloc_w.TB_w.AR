@@ -1,4 +1,5 @@
 #%% importing required modules
+from multiprocessing import process
 from operator import index
 import pandas as pd
 import numpy as np
@@ -68,12 +69,16 @@ class GASolver():
 		self.num_gene = self.num_oht * 4 # 1 id + 3 random key
 
 		# Raw input
-		self.pop_size=int(input('Please input the size of population: ') or 32) # default: 32
-		self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5) # default: 0.8
-		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default: 0.8
-		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default: 0.2
+		self.pop_size=int(input('Please input the size of population: ') or 64) 
+		# self.pop_size = 64
+		# self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5) # default: 0.8
+		self.parent_selection_rate = 0.8
+		# self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default: 0.8
+		self.crossover_rate = 0.8
+		# self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default: 0.2
+		self.mutation_rate = 0.2
 		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
-		self.num_mutation_pos=round(self.num_gene / 4 * mutation_selection_rate)
+		self.num_mutation_pos = round(self.num_gene / 4 * mutation_selection_rate)
 		self.num_iter=int(input('Please input number of iteration: ') or 200) # default: 2000
 			
 		self.pop_list = []
@@ -142,37 +147,7 @@ class GASolver():
 		else:
 			return np.argmax(key)
  
-	def cal_makespan(self, pop:list, rk_pop:list):
-		agent_time = [0 for _ in range(self.num_agent)]
-		agent_oht_id = [[] for _ in range(self.num_agent)]
-		agent_POS = {
-			"LH": self.POS["LH"],
-			"RH": self.POS["RH"],
-			"BOT": self.POS["BOT"]
-		}
-		oht_end_time = np.zeros(self.num_oht)
-		for oht_id in pop:
-			agent = self.decide_agent(rk_pop[oht_id])
-			self.alloc_res[oht_id] = agent
-			oht = self.oht_list[oht_id]
-			# print(oht)
-			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			if self.oht_list[oht_id].prev:
-				# oht start time should be bigger than every previous oht
-				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				end_time = max(agent_time[agent], job_time) + process_time
-			else:
-				end_time = agent_time[agent] + process_time
-			agent_oht_id[agent].append(oht_id)
-			agent_time[agent] = end_time
-			oht_end_time[oht_id] = end_time
-
-		makespan = max(agent_time)
-  
-		# lower the oht random key of the highest makespan
-		for oht_id in agent_oht_id[np.argmax(agent_time)]:
-			rk_pop[oht_id][agent] -= 0.01
-		return makespan
+	
    
 	def selection(self):
 		"""
@@ -333,8 +308,61 @@ class GASolver():
 		
 		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_now = {self.Tbest_now}, T-best = {self.Tbest}", end="")
    
+	def cal_makespan(self, pop:list, rk_pop:list):
+		agent_time = [0 for _ in range(self.num_agent)]
+		agent_oht_id = [[] for _ in range(self.num_agent)]
+		agent_POS = {
+			"LH": self.POS["LH"],
+			"RH": self.POS["RH"],
+			"BOT": self.POS["BOT"]
+		}
+		oht_end_time = np.zeros(self.num_oht)
+		bind_is_scheduled = False
+		bind_start_time = 0
+		for oht_id in pop:
+			agent = self.decide_agent(rk_pop[oht_id])
+			self.alloc_res[oht_id] = agent
+			oht = self.oht_list[oht_id]
+			# print(oht)
+			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
+			
+			if bind_is_scheduled:
+				bind_is_scheduled = False
+				end_time = bind_start_time + process_time
+			elif self.oht_list[oht_id].bind != -1:
+				bind_is_scheduled = True
+				job_time = 0
+				if self.oht_list[oht_id].prev:
+					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
+				bind_job_time = 0
+				if self.oht_list[oht_id].bind.prev:
+					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
+				bind_agent = self.decide_agent(rk_pop[self.oht_list[oht_id].bind.id])
+				bind_start_time = max(agent_time[agent], agent_time[bind_agent], job_time, bind_job_time)
+				punishment = 0
+				if agent == bind_agent:
+					punishment = 1000000
+				end_time = bind_start_time + process_time + punishment
+			elif self.oht_list[oht_id].prev:
+				# oht start time should be bigger than every previous oht
+				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
+				end_time = max(agent_time[agent], job_time) + process_time
+			else:
+				end_time = agent_time[agent] + process_time
+
+			agent_oht_id[agent].append(oht_id)
+			agent_time[agent] = end_time
+			oht_end_time[oht_id] = end_time
+
+		makespan = max(agent_time)
+  
+		# lower the oht random key of the highest makespan
+		for oht_id in agent_oht_id[np.argmax(agent_time)]:
+			rk_pop[oht_id][agent] -= 0.01
+
+		return makespan
+   
 	def gantt_chart(self):
-     
 		agent_time = [0 for _ in range(self.num_agent)]
 		agent_POS = {
 			"LH": self.POS["LH"],
@@ -342,18 +370,34 @@ class GASolver():
 			"BOT": self.POS["BOT"]
 		}
 		tmp = []
-		oht_end_time = np.zeros(self.num_oht)
+		oht_end_time = [0 for _ in range(self.num_oht)]
+		bind_is_scheduled = False
+		bind_start_time = 0
+		print(f"seq: ", self.sequence_best[:-1])
+		print(f"rk: ", [AGENT[self.decide_agent(rkb)] for rkb in self.random_key_best])
 		for oht_id in self.sequence_best[:-1]: # not showing END node
 			agent = self.decide_agent(self.random_key_best[oht_id])
-			# self.alloc_res[oht_id] = agent
 			oht = self.oht_list[oht_id]
-			print(f"agent: {AGENT[agent]}")
-			print(f"OHT: #{oht.id}")
-			# print(oht)
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			if self.oht_list[oht_id].prev:
+			if bind_is_scheduled:
+				bind_is_scheduled = False
+				end_time = bind_start_time + process_time
+			elif self.oht_list[oht_id].bind != -1:
+				bind_is_scheduled = True
+				job_time = 0
+				if self.oht_list[oht_id].prev:
+					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
+				bind_job_time = 0
+				bind_agent_time = 0
+				if self.oht_list[oht_id].bind.prev:
+					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
+				bind_agent = self.decide_agent(self.random_key_best[self.oht_list[oht_id].bind.id])
+				bind_agent_time = agent_time[bind_agent]
+				bind_start_time = max(agent_time[agent], bind_agent_time, job_time, bind_job_time)
+				end_time = bind_start_time + process_time
+			elif self.oht_list[oht_id].prev:
 				# oht start time should be bigger than every previous oht
-				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev) 
+				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				end_time = max(agent_time[agent], job_time) + process_time
 			else:
 				end_time = agent_time[agent] + process_time
@@ -364,8 +408,8 @@ class GASolver():
 			end_time = str(timedelta(seconds = end_time))
 			tmp.append(dict(
         			Task = f'{AGENT[agent]}', 
-           			Start = f'2024-04-21 {(str(start_time))}', 
-            		Finish = f'2024-04-21 {(str(end_time))}',
+           			Start = f'2024-04-24 {(str(start_time))}', 
+            		Finish = f'2024-04-24 {(str(end_time))}',
             		Resource =f'OHT{oht_id}')
             	)
 		
