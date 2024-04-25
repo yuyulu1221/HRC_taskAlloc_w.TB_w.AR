@@ -53,54 +53,42 @@ class GASolver():
 		# Get MTM dataframe
 		self.MTM = read_MTM()
 		# Get OHT relation
-		# self.OHT_in_edge = read_OHT_relation()
 		self.oht_list = read_OHT_relation(oht_list)
+  
 		for oht in self.oht_list:
 			print("---")
-			print(oht.prev)
-			print(oht.next)
+			print(f"OHT{oht.id}")
+			print(f"prev: {[oht_p.id for oht_p in oht.prev]}")
 
 		self.num_oht = len(oht_list)
-		# self.num_seq = 0
   
 		self.alloc_random_key = [[0.5, 0.5, 0.5] for _ in range(self.num_oht)]
 		self.alloc_res = [0 for _ in range(self.num_oht)]
 
 		self.num_agent = 3
 
-		self.num_gene = self.num_oht * 4 # 1 id + 3 random key
-
-		# Raw input
+		# Hyper-paremeters
 		self.pop_size=int(input('Please input the size of population: ') or 64) 
-		# self.pop_size = 64
-		# self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5) # default: 0.8
 		self.parent_selection_rate = 0.8
-		# self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default: 0.8
 		self.crossover_rate = 0.8
-		# self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default: 0.2
 		self.mutation_rate = 0.2
-		# mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
 		mutation_selection_rate = 0.2
-		self.num_mutation_pos = round(self.num_gene / 4 * mutation_selection_rate)
+		self.num_mutation_pos = round(self.num_oht * mutation_selection_rate)
 		self.num_iter=int(input('Please input number of iteration: ') or 200) # default: 2000
 			
 		self.pop_list = []
-		self.pop_fit = []
+		self.pop_fit_list = []
 		self.rk_pop_list = []
-   
-		self.makespan_rec = []
-		self.start_time = time.time() # ? 
   
 	def run(self):
 		self.init_pop()
 		for it in range(self.num_iter):
-			self.Tbest_now = 999999999
+			self.Tbest_local = 999999999
 			parent, rk_parent = self.selection()
 			offspring = self.maskCrossover(parent)
 			rk_offspring = self.randomKeyCrossover(rk_parent)
 			self.replacement(offspring, rk_offspring)
 			self.progress_bar(it)
-		print("\n")
 		self.gantt_chart()
    
 	def init_pop(self) -> None:
@@ -113,7 +101,7 @@ class GASolver():
 			pop = self.relation_repairment(pop)
 			self.pop_list.append(pop)
 			self.rk_pop_list.append([[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)])
-			self.pop_fit.append(self.cal_makespan(self.pop_list[i], self.rk_pop_list[i]))
+			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.rk_pop_list[i]))
 	
 	def decide_agent(self, key) -> int:
 		"""
@@ -149,13 +137,13 @@ class GASolver():
 		
 		## Renew pop_fit and calculate total fit for roulette wheel approach
 		for i in range(self.pop_size):
-			self.pop_fit[i] = self.cal_makespan(self.pop_list[i], self.rk_pop_list[i])
-			total_fit += self.pop_fit[i]
+			self.pop_fit_list[i] = self.cal_makespan(self.pop_list[i], self.rk_pop_list[i])
+			total_fit += self.pop_fit_list[i]
 		
 		## Calculate cumulative propability
-		cumulate_prop.append(self.pop_fit[0] / total_fit)
+		cumulate_prop.append(self.pop_fit_list[0] / total_fit)
 		for i in range(1, self.pop_size):
-			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit[i]/total_fit)
+			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit_list[i]/total_fit)
 		
 		## Generate parent and rk_parent list
 		for i in range(0, round(self.pop_size * self.parent_selection_rate)): 
@@ -303,73 +291,97 @@ class GASolver():
 			offspring_fit.append(self.cal_makespan(offspring[i], rk_offspring[i]))
    
 		self.pop_list = list(self.pop_list) + offspring
-		self.pop_fit = list(self.pop_fit) + offspring_fit
+		self.pop_fit_list = list(self.pop_fit_list) + offspring_fit
 
 		## Sort by pop fit
-		tmp = sorted(list(zip(self.pop_fit, list(self.pop_list), list(self.rk_pop_list))))
-		self.pop_fit, self.pop_list, self.rk_pop_list = zip(*tmp)
+		tmp = sorted(list(zip(self.pop_fit_list, list(self.pop_list), list(self.rk_pop_list))))
+		self.pop_fit_list, self.pop_list, self.rk_pop_list = zip(*tmp)
 		self.pop_list = list(self.pop_list[:self.pop_size])
-		self.pop_fit = list(self.pop_fit[:self.pop_size])
+		self.pop_fit_list = list(self.pop_fit_list[:self.pop_size])
 		self.rk_pop_list = list(self.rk_pop_list[:self.pop_size])
 		
 		## Update local best
-		self.Tbest_now = self.pop_fit[0]
-		sequence_now = copy.deepcopy(self.pop_list[0])
-		random_key_now = copy.deepcopy(self.rk_pop_list[0])
+		self.Tbest_local = self.pop_fit_list[0]
+		seq_best_local = copy.copy(self.pop_list[0])
+		rk_best_local = copy.copy(self.rk_pop_list[0])
 
 		## Update global best
-		if self.Tbest_now < self.Tbest:
-			self.Tbest = self.Tbest_now
-			self.sequence_best = copy.deepcopy(sequence_now)
-			self.random_key_best = copy.deepcopy(random_key_now)
+		if self.Tbest_local < self.Tbest:
+			self.Tbest = self.Tbest_local
+			self.seq_best = copy.copy(seq_best_local)
+			self.rk_best = copy.copy(rk_best_local)
    
 	def progress_bar(self, n):
 		bar_cnt = (int(((n+1)/self.num_iter)*20))
 		space_cnt = 20 - bar_cnt		
-		bar = "▇"*bar_cnt + " "*space_cnt
-		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_now = {self.Tbest_now}, T-best = {self.Tbest}", end="")
+		bar = "▇" * bar_cnt + " " * space_cnt
+		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_now = {self.Tbest_local}, T-best = {self.Tbest}", end="")
    
 	def cal_makespan(self, pop:list, rk_pop:list):
+		"""
+		Returns:
+			int: makespan calculated by scheduling
+		"""
 		agent_time = [0 for _ in range(self.num_agent)]
 		agent_oht_id = [[] for _ in range(self.num_agent)]
+  
+		## Current position for each agent
 		agent_POS = {
 			"LH": self.POS["LH"],
 			"RH": self.POS["RH"],
 			"BOT": self.POS["BOT"]
 		}
-		oht_end_time = np.zeros(self.num_oht)
+
+		## Record end time of each OHT
+		oht_end_time = [0 for _ in range(self.num_oht)]
+
+		## Special cases: binded OHT is scheduled
 		bind_is_scheduled = False
 		bind_end_time = 0
+
 		for oht_id in pop:
 			agent = self.decide_agent(rk_pop[oht_id])
-			self.alloc_res[oht_id] = agent
 			oht = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
+			punishment = 0
 
+			## Use already calculated data when scheduling second binded OHT
 			if bind_is_scheduled:
 				end_time = bind_end_time
 				bind_is_scheduled = False
+
+			## For scheduling first binded OHT 
 			elif self.oht_list[oht_id].bind != -1:
-				bind_is_scheduled = True
+
+				## Find the end time of current OHT
 				job_time = 0
 				if self.oht_list[oht_id].prev:
 					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				end_time = max(agent_time[agent], job_time) + process_time
+
+				## Find the end time of bind OHT
+				bind_agent = self.decide_agent(rk_pop[self.oht_list[oht_id].bind.id])
+				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
-				bind_agent = self.decide_agent(rk_pop[self.oht_list[oht_id].bind.id])
-				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
 				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
+				bind_is_scheduled = True
+
+				## Add punishment when using same agent
 				punishment = 0
 				if agent == bind_agent:
-					punishment = 10000
+					punishment = 2000
+
 				bind_end_time = max(end_time, bind_end_time) + punishment
 				end_time = max(end_time, bind_end_time) + punishment
+
+			## Normal OHT with previous OHT
 			elif self.oht_list[oht_id].prev:
-				# oht start time should be bigger than every previous oht
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				end_time = max(agent_time[agent], job_time) + process_time
+
+			## Normal OHT without previous OHT
 			else:
 				end_time = agent_time[agent] + process_time
 
@@ -379,29 +391,11 @@ class GASolver():
 
 		makespan = max(agent_time)
   
-		# lower the oht random key of the highest makespan
+		# The random key of the OHT executed by the agent with the longest makespan will be lowered
 		for oht_id in agent_oht_id[np.argmax(agent_time)]:
-			rk_pop[oht_id][agent] -= 0.01
+			rk_pop[oht_id][agent] -= abs(np.random.normal())
 
 		return makespan
-
-	def gantt_chart_2(self):
-		import matplotlib.pyplot as plt
-		fig, gnt = plt.subplots()
-		# Setting Y-axis limits
-		gnt.set_ylim(0, 50)
-
-		# Setting X-axis limits
-		# gnt.set_xlim(0, emax.value())
-
-		# Setting labels for x-axis and y-axis
-		gnt.set_xlabel('second since start')
-		gnt.set_ylabel('Agent')
-
-		# Setting ticks on y-axis
-		gnt.set_yticks([15, 25, 35])
-		# Labelling tickes of y-axis
-		gnt.set_yticklabels(['B', 'R', 'L'])
    
 	def gantt_chart(self):
 		agent_time = [0 for _ in range(self.num_agent)]
@@ -414,12 +408,14 @@ class GASolver():
 		oht_end_time = [0 for _ in range(self.num_oht)]
 		bind_is_scheduled = False
 		bind_end_time = 0
-  
-		print(f"OHT sequence: ", self.sequence_best[:-1])
-		print(f"Random key: ", [AGENT[self.decide_agent(rkb)] for rkb in self.random_key_best][:-1])
 
-		for oht_id in self.sequence_best[:-1]: # not showing END node
-			agent = self.decide_agent(self.random_key_best[oht_id])
+		print("\n")
+		print(f"Best fit: \n-----\t", self.cal_makespan(self.seq_best, self.rk_best))
+		print(f"Best OHT sequence: \n-----\t", self.seq_best[:-1])
+		print(f"Best choice of agent: \n-----\t", [AGENT[self.decide_agent(rkb)] for rkb in self.rk_best])
+
+		for oht_id in self.seq_best[:-1]: ## not showing END node
+			agent = self.decide_agent(self.rk_best[oht_id])
 			oht = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
 			if bind_is_scheduled:
@@ -434,12 +430,12 @@ class GASolver():
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
-				bind_agent = self.decide_agent(self.random_key_best[self.oht_list[oht_id].bind.id])
+				bind_agent = self.decide_agent(self.rk_best[self.oht_list[oht_id].bind.id])
 				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
 				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
 				punishment = 0
 				if agent == bind_agent:
-					punishment = 10000
+					punishment = 2000
 				bind_end_time = max(end_time, bind_end_time) + punishment
 				end_time = max(end_time, bind_end_time) + punishment
 			elif self.oht_list[oht_id].prev:
@@ -455,8 +451,8 @@ class GASolver():
 			end_time = str(timedelta(seconds = end_time))
 			tmp.append(dict(
         			Agent = f'{AGENT[agent]}', 
-           			Start = f'2024-04-24 {(str(start_time))}', 
-            		Finish = f'2024-04-24 {(str(end_time))}',
+           			Start = f'2024-04-25 {(str(start_time))}', 
+            		Finish = f'2024-04-25 {(str(end_time))}',
             		Resource =f'OHT{oht_id}')
             	)
 		
@@ -474,8 +470,7 @@ class GASolver():
 				'Agent': ['BOT', 'RH', 'LH'],
 				'Resource': [f"OHT{i}" for i in range(self.num_oht - 1)]
 			},
-			text='Resource',
-			
+			text='Resource'
    		)
 		fig.update_yaxes(autorange="reversed")
 		fig.show()
