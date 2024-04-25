@@ -384,6 +384,24 @@ class GASolver():
 			rk_pop[oht_id][agent] -= 0.01
 
 		return makespan
+
+	def gantt_chart_2(self):
+		import matplotlib.pyplot as plt
+		fig, gnt = plt.subplots()
+		# Setting Y-axis limits
+		gnt.set_ylim(0, 50)
+
+		# Setting X-axis limits
+		# gnt.set_xlim(0, emax.value())
+
+		# Setting labels for x-axis and y-axis
+		gnt.set_xlabel('second since start')
+		gnt.set_ylabel('Agent')
+
+		# Setting ticks on y-axis
+		gnt.set_yticks([15, 25, 35])
+		# Labelling tickes of y-axis
+		gnt.set_yticklabels(['B', 'R', 'L'])
    
 	def gantt_chart(self):
 		agent_time = [0 for _ in range(self.num_agent)]
@@ -455,7 +473,10 @@ class GASolver():
 			category_orders={
 				'Agent': ['BOT', 'RH', 'LH'],
 				'Resource': [f"OHT{i}" for i in range(self.num_oht - 1)]
-			})
+			},
+			text='Resource',
+			
+   		)
 		fig.update_yaxes(autorange="reversed")
 		fig.show()
   
