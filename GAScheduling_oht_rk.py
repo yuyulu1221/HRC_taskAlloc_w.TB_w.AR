@@ -3,7 +3,6 @@ from multiprocessing import process
 from operator import index
 import pandas as pd
 import numpy as np
-import time
 import copy
 import plotly.express as px
 from datetime import timedelta
@@ -68,26 +67,26 @@ class GASolver():
 		self.num_agent = 3
 
 		# Hyper-paremeters
-		self.pop_size=int(input('Please input the size of population: ') or 64) 
+		self.pop_size=int(input('Please input the size of population: ') or 128) 
 		self.parent_selection_rate = 0.8
 		self.crossover_rate = 0.8
 		self.mutation_rate = 0.2
 		mutation_selection_rate = 0.2
 		self.num_mutation_pos = round(self.num_oht * mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 200) # default: 2000
+		self.num_iter=int(input('Please input number of iteration: ') or 500) 
 			
 		self.pop_list = []
 		self.pop_fit_list = []
 		self.rk_pop_list = []
+		self.alloc_pop_list = []
   
 	def run(self):
 		self.init_pop()
 		for it in range(self.num_iter):
 			self.Tbest_local = 999999999
 			parent, rk_parent = self.selection()
-			offspring = self.maskCrossover(parent)
-			rk_offspring = self.randomKeyCrossover(rk_parent)
-			self.replacement(offspring, rk_offspring)
+			offspring, rk_offspring, alloc_offspring = self.crossover(parent, rk_parent)
+			self.replacement(offspring, rk_offspring, alloc_offspring)
 			self.progress_bar(it)
 		self.gantt_chart()
    
@@ -100,8 +99,10 @@ class GASolver():
 			pop = list(np.random.permutation(tmp))
 			pop = self.relation_repairment(pop)
 			self.pop_list.append(pop)
-			self.rk_pop_list.append([[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)])
-			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.rk_pop_list[i]))
+			rk_pop = [[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)]
+			self.rk_pop_list.append(rk_pop)
+			self.alloc_pop_list.append([self.decide_agent(rk) for rk in rk_pop])
+			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i]))
 	
 	def decide_agent(self, key) -> int:
 		"""
@@ -112,7 +113,7 @@ class GASolver():
 		Returns:
 			int: Agent id
 		"""
-		if key[0] == key[1] == key[2]:
+		if key[0] == key[1] and key[0] == key[2]:
 			return np.random.randint(0, 3)
 		elif key[0] == key[1] and key[0] > key[2]:
 			return np.random.randint(0, 2)
@@ -137,13 +138,13 @@ class GASolver():
 		
 		## Renew pop_fit and calculate total fit for roulette wheel approach
 		for i in range(self.pop_size):
-			self.pop_fit_list[i] = self.cal_makespan(self.pop_list[i], self.rk_pop_list[i])
-			total_fit += self.pop_fit_list[i]
+			self.pop_fit_list[i] = self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i])
+			total_fit += 1 / self.pop_fit_list[i]
 		
 		## Calculate cumulative propability
 		cumulate_prop.append(self.pop_fit_list[0] / total_fit)
 		for i in range(1, self.pop_size):
-			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit_list[i]/total_fit)
+			cumulate_prop.append(cumulate_prop[i-1] + self.pop_fit_list[i] / total_fit)
 		
 		## Generate parent and rk_parent list
 		for i in range(0, round(self.pop_size * self.parent_selection_rate)): 
@@ -155,65 +156,67 @@ class GASolver():
 
 		return parent, rk_parent
    
-	def maskCrossover(self, parents:list) -> list:
+	def crossover(self, parents:list, rk_parents:list) -> list:
+		offspring = []
+		rk_offspring = []
+		for _ in range(round(self.pop_size * self.crossover_rate)):
+			## choose 2 parents from parent list
+			i, j = np.random.choice(len(parents), 2, replace = False)
+			p0, p1 = parents[i], parents[j]
+			rk_p0, rk_p1 = rk_parents[i], rk_parents[j]
+   
+			offspring.append(self.mask_crossover(p0, p1))
+			rk_offspring.append(self.random_key_crossover(rk_p0, rk_p1))
+		alloc_offspring = [[self.decide_agent(rk) for rk in rk_offspring[idx]] for idx in range(len(rk_offspring))]
+
+		return offspring, rk_offspring, alloc_offspring
+  
+	def mask_crossover(self, parent0, parent1) -> list:
 		""" 
 		Args:
 			parents (list): choice parents
 		Returns:
 			list: offspring list
 		"""
-		offspring = []
-		for _ in range(round(self.pop_size * self.crossover_rate)):
-      
-			## choose 2 parents from parent list
-			i, j = np.random.choice(len(parents), 2, replace = False)
-			parent0, parent1 = parents[i], parents[j]
-   
-			## True for parent0; False for parent1
-			mask = [np.random.choice([False, True]) for _ in range(self.num_oht)]
-			child = [-1 for _ in range(self.num_oht)]
-			is_placed = [False for _ in range(self.num_oht)]
-   
-			## Using mask to fill in the value of parent0 into child
-			for i, p in enumerate(parent0):
-				if mask[i] == True:
-					child[i] = p
-					is_placed[p] = True
-	
-			## Using p1_idx to find next index that can be filled in
-			p1_idx = 0
-			for i in range(self.num_oht):
-				if mask[i] == False:
-					while p1_idx < self.num_oht and is_placed[parent1[p1_idx]]:
-						p1_idx += 1	
-					if p1_idx >= self.num_oht:
-						break
-					child[i] = parent1[p1_idx]
-					is_placed[parent1[p1_idx]] = True
-     
-			## Mutation: choose 2 position to swap
-			if self.mutation_rate >= np.random.rand():
-				i, j = np.random.choice(self.num_oht, 2, replace=False)
-				child[i], child[j] = child[j], child[i]
-			child = self.relation_repairment(child)
-			offspring.append(child)
-	
-		return offspring
+		## True for parent0; False for parent1
+		mask = [np.random.choice([False, True]) for _ in range(self.num_oht)]
+		child = [-1 for _ in range(self.num_oht)]
+		is_placed = [False for _ in range(self.num_oht)]
 
-	def randomKeyCrossover(self, parents) -> list:
-		""" 
-		Args:
-			parents (list): choice parents
-		Returns:
-			list: random key offspring list
-		"""
-		offspring = []
-		for _ in range(round(self.pop_size * self.crossover_rate)):
-			i, j = np.random.choice(len(parents), 2, replace=False)
-			parent0, parent1 = parents[i], parents[j]
-			child = (np.array(parent0) + np.array(parent1)) / 2
-			offspring.append(child)
-		return offspring
+		## Using mask to fill in the value of parent0 into child
+		for i, p in enumerate(parent0):
+			if mask[i] == True:
+				child[i] = p
+				is_placed[p] = True
+
+		## Using p1_idx to find next index that can be filled in
+		p1_idx = 0
+		for i in range(self.num_oht):
+			if mask[i] == False:
+				while p1_idx < self.num_oht and is_placed[parent1[p1_idx]]:
+					p1_idx += 1	
+				if p1_idx >= self.num_oht:
+					break
+				child[i] = parent1[p1_idx]
+				is_placed[parent1[p1_idx]] = True
+	
+		## Sequence mutation: choose 2 position to swap
+		if self.mutation_rate >= np.random.rand():
+			i, j = np.random.choice(self.num_oht, 2, replace=False)
+			child[i], child[j] = child[j], child[i]
+		child = self.relation_repairment(child)
+   
+		return child
+
+	def random_key_crossover(self, parent0, parent1) -> list:
+
+		child = (np.array(parent0) + np.array(parent1)) / 2
+
+		## Random key mutation: choose 2 position to swap
+		if self.mutation_rate >= np.random.rand():
+			child = [c + np.random.normal() / 10 for c in child]
+
+		return child
     
 	def relation_repairment(self, oht_seq) -> list:
 		"""
@@ -282,42 +285,45 @@ class GASolver():
  
 		return output	
 
-	def replacement(self, offspring, rk_offspring) -> None:
+	def replacement(self, offspring, rk_offspring, alloc_offspring) -> None:
 		"""
 		Replace worse pop by better offspring		
 		"""
 		offspring_fit = []
 		for i in range(len(offspring)):
-			offspring_fit.append(self.cal_makespan(offspring[i], rk_offspring[i]))
+			offspring_fit.append(self.cal_makespan(offspring[i], alloc_offspring[i]))
    
 		self.pop_list = list(self.pop_list) + offspring
 		self.pop_fit_list = list(self.pop_fit_list) + offspring_fit
+		self.rk_pop_list = list(self.rk_pop_list) + rk_offspring
+		self.alloc_pop_list = list(self.alloc_pop_list) + alloc_offspring
 
 		## Sort by pop fit
-		tmp = sorted(list(zip(self.pop_fit_list, list(self.pop_list), list(self.rk_pop_list))))
-		self.pop_fit_list, self.pop_list, self.rk_pop_list = zip(*tmp)
+		tmp = sorted(list(zip(self.pop_fit_list, list(self.pop_list), list(self.rk_pop_list), list(self.alloc_pop_list))), key=lambda x:x[0])
+		self.pop_fit_list, self.pop_list, self.rk_pop_list, self.alloc_pop_list = zip(*tmp)
 		self.pop_list = list(self.pop_list[:self.pop_size])
 		self.pop_fit_list = list(self.pop_fit_list[:self.pop_size])
 		self.rk_pop_list = list(self.rk_pop_list[:self.pop_size])
+		self.alloc_pop_list = list(self.alloc_pop_list[:self.pop_size])
 		
 		## Update local best
 		self.Tbest_local = self.pop_fit_list[0]
-		seq_best_local = copy.copy(self.pop_list[0])
-		rk_best_local = copy.copy(self.rk_pop_list[0])
+		seq_best_local = self.pop_list[0]
+		alloc_best_local = self.alloc_pop_list[0]
 
 		## Update global best
 		if self.Tbest_local < self.Tbest:
 			self.Tbest = self.Tbest_local
-			self.seq_best = copy.copy(seq_best_local)
-			self.rk_best = copy.copy(rk_best_local)
+			self.seq_best = seq_best_local
+			self.alloc_best = alloc_best_local
    
 	def progress_bar(self, n):
 		bar_cnt = (int(((n+1)/self.num_iter)*20))
 		space_cnt = 20 - bar_cnt		
 		bar = "▇" * bar_cnt + " " * space_cnt
-		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_now = {self.Tbest_local}, T-best = {self.Tbest}", end="")
+		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_local = {self.Tbest_local}, T-best = {self.Tbest}", end="")
    
-	def cal_makespan(self, pop:list, rk_pop:list):
+	def cal_makespan(self, pop:list, alloc_pop:list):
 		"""
 		Returns:
 			int: makespan calculated by scheduling
@@ -340,12 +346,10 @@ class GASolver():
 		bind_end_time = 0
 
 		for oht_id in pop:
-			agent = self.decide_agent(rk_pop[oht_id])
+			agent = alloc_pop[oht_id]
 			oht = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			punishment = 0
 
-			## Use already calculated data when scheduling second binded OHT
 			if bind_is_scheduled:
 				end_time = bind_end_time
 				bind_is_scheduled = False
@@ -360,7 +364,7 @@ class GASolver():
 				end_time = max(agent_time[agent], job_time) + process_time
 
 				## Find the end time of bind OHT
-				bind_agent = self.decide_agent(rk_pop[self.oht_list[oht_id].bind.id])
+				bind_agent = alloc_pop[self.oht_list[oht_id].bind.id]
 				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
@@ -392,8 +396,12 @@ class GASolver():
 		makespan = max(agent_time)
   
 		# The random key of the OHT executed by the agent with the longest makespan will be lowered
-		for oht_id in agent_oht_id[np.argmax(agent_time)]:
-			rk_pop[oht_id][agent] -= abs(np.random.normal())
+		# for oht_id in agent_oht_id[np.argmax(agent_time)]:
+		# 	for ag in range(3):
+		# 		if ag == agent:
+		# 			rk_pop[oht_id][agent] -= abs(np.random.normal())
+		# 		else:
+		# 			rk_pop[oht_id][agent] += abs(np.random.normal())
 
 		return makespan
    
@@ -410,38 +418,55 @@ class GASolver():
 		bind_end_time = 0
 
 		print("\n")
-		print(f"Best fit: \n-----\t", self.cal_makespan(self.seq_best, self.rk_best))
+		print(f"Best fit: \n-----\t", self.Tbest)
 		print(f"Best OHT sequence: \n-----\t", self.seq_best[:-1])
-		print(f"Best choice of agent: \n-----\t", [AGENT[self.decide_agent(rkb)] for rkb in self.rk_best])
+		print(f"Best choice of agent: \n-----\t", [AGENT[ag] for ag in self.alloc_best])
 
 		for oht_id in self.seq_best[:-1]: ## not showing END node
-			agent = self.decide_agent(self.rk_best[oht_id])
+      
+			## Use already calculated data when scheduling second binded OHT
+			agent = self.alloc_best[oht_id]
 			oht = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
+   
 			if bind_is_scheduled:
 				end_time = bind_end_time
 				bind_is_scheduled = False
+    
+			## For scheduling first binded OHT 
 			elif self.oht_list[oht_id].bind != -1:
-				bind_is_scheduled = True
+				
+				## Find the end time of current OHT
 				job_time = 0
 				if self.oht_list[oht_id].prev:
 					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				end_time = max(agent_time[agent], job_time) + process_time
+    
+				## Find the end time of bind OHT
+				bind_agent = self.alloc_best[self.oht_list[oht_id].bind.id]
+				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
-				bind_agent = self.decide_agent(self.rk_best[self.oht_list[oht_id].bind.id])
-				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
+				bind_is_scheduled = True
+				
 				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
+    
+				## Add punishment when using same agent
 				punishment = 0
 				if agent == bind_agent:
 					punishment = 2000
+
 				bind_end_time = max(end_time, bind_end_time) + punishment
 				end_time = max(end_time, bind_end_time) + punishment
+    
+			## Normal OHT with previous OHT
 			elif self.oht_list[oht_id].prev:
-				# oht start time should be bigger than every previous oht
+				## oht start time should be bigger than every previous oht
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				end_time = max(agent_time[agent], job_time) + process_time
+    
+			## Normal OHT without previous OHT
 			else:
 				end_time = agent_time[agent] + process_time
 			agent_time[agent] = end_time
@@ -451,8 +476,8 @@ class GASolver():
 			end_time = str(timedelta(seconds = end_time))
 			tmp.append(dict(
         			Agent = f'{AGENT[agent]}', 
-           			Start = f'2024-04-25 {(str(start_time))}', 
-            		Finish = f'2024-04-25 {(str(end_time))}',
+           			Start = f'2024-05-01 {(str(start_time))}', 
+            		Finish = f'2024-05-01 {(str(end_time))}',
             		Resource =f'OHT{oht_id}')
             	)
 		
