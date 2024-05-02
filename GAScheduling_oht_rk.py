@@ -70,7 +70,7 @@ class GASolver():
 		self.pop_size=int(input('Please input the size of population: ') or 128) 
 		self.parent_selection_rate = 0.8
 		self.crossover_rate = 0.8
-		self.mutation_rate = 0.2
+		self.mutation_rate = 0.08
 		mutation_selection_rate = 0.2
 		self.num_mutation_pos = round(self.num_oht * mutation_selection_rate)
 		self.num_iter=int(input('Please input number of iteration: ') or 500) 
@@ -79,6 +79,8 @@ class GASolver():
 		self.pop_fit_list = []
 		self.rk_pop_list = []
 		self.alloc_pop_list = []
+  
+		self.PUN_val = 2000
   
 	def run(self):
 		self.init_pop()
@@ -344,11 +346,14 @@ class GASolver():
 		## Special cases: binded OHT is scheduled
 		bind_is_scheduled = False
 		bind_end_time = 0
+  
+		timestamps = [[], []]
+		# timestamps = [{}, {}, {}]
 
 		for oht_id in pop:
 			agent = alloc_pop[oht_id]
-			oht = self.oht_list[oht_id]
-			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
+			oht:OHT = self.oht_list[oht_id]
+			process_time = int(oht.get_oht_time(agent_POS, agent, self.POS, self.MTM))
 
 			if bind_is_scheduled:
 				end_time = bind_end_time
@@ -362,46 +367,94 @@ class GASolver():
 				if self.oht_list[oht_id].prev:
 					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				end_time = max(agent_time[agent], job_time) + process_time
-
+				
 				## Find the end time of bind OHT
 				bind_agent = alloc_pop[self.oht_list[oht_id].bind.id]
-				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
+				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent, self.POS, self.MTM))
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
 				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
+
 				bind_is_scheduled = True
 
 				## Add punishment when using same agent
-				punishment = 0
+				same_agent_PUN = 0
 				if agent == bind_agent:
-					punishment = 2000
+					same_agent_PUN = self.PUN_val
 
-				bind_end_time = max(end_time, bind_end_time) + punishment
-				end_time = max(end_time, bind_end_time) + punishment
+				bind_end_time = max(end_time, bind_end_time) + same_agent_PUN
+				end_time = max(end_time, bind_end_time) + same_agent_PUN
+
+				if agent == 0 or agent == 1:
+					start_time = end_time - process_time
+					tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
+					for t, pos in tmp:
+						timestamps[agent].append((start_time + t, pos))
+				oht.renew_agent_pos(agent_POS, agent, self.POS)
+
+				if bind_agent == 0 or bind_agent == 1:
+					bind_start_time = bind_end_time - bind_process_time
+					tmp = oht.get_timestamp(agent_POS, bind_agent, self.POS, self.MTM)
+					for t, pos in tmp:
+						timestamps[bind_agent].append((bind_start_time + t, pos))
+				oht.bind.renew_agent_pos(agent_POS, bind_agent, self.POS)
 
 			## Normal OHT with previous OHT
 			elif self.oht_list[oht_id].prev:
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				end_time = max(agent_time[agent], job_time) + process_time
+				start_time = max(agent_time[agent], job_time)
+				end_time = start_time + process_time
+
+				if agent == 0 or agent == 1:
+					tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
+					for t, pos in tmp:
+						timestamps[agent].append((start_time + t, pos))
+				oht.renew_agent_pos(agent_POS, agent, self.POS)
 
 			## Normal OHT without previous OHT
 			else:
-				end_time = agent_time[agent] + process_time
+				start_time = agent_time[agent]
+				end_time = start_time + process_time
+	
+				if agent == 0 or agent == 1:
+					tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
+					for t, pos in tmp:
+						timestamps[agent].append((start_time + t, pos))
+				oht.renew_agent_pos(agent_POS, agent, self.POS)
 
 			agent_oht_id[agent].append(oht_id)
 			agent_time[agent] = end_time
 			oht_end_time[oht_id] = end_time
 
-		makespan = max(agent_time)
-  
-		# The random key of the OHT executed by the agent with the longest makespan will be lowered
-		# for oht_id in agent_oht_id[np.argmax(agent_time)]:
-		# 	for ag in range(3):
-		# 		if ag == agent:
-		# 			rk_pop[oht_id][agent] -= abs(np.random.normal())
-		# 		else:
-		# 			rk_pop[oht_id][agent] += abs(np.random.normal())
+		## Handle interference problem
+		i, j = 0, 0
+		lh_now, rh_now = self.POS['LH'], self.POS['RH']
+		interference_PUN = 0
+		## Compare the x-coord of LH and RH
+		while i < len(timestamps[0]) or j < len(timestamps[1]):
+			if lh_now[0] > rh_now[0]:
+				interference_PUN = self.PUN_val
+				break
+			if j >= len(timestamps[1]):
+				lh_now = timestamps[0][i][1]
+				i += 1
+			elif i >= len(timestamps[0]):
+				rh_now = timestamps[1][j][1]
+				j += 1
+			elif timestamps[0][i][0] < timestamps[1][j][0]:
+				lh_now = timestamps[0][i][1]
+				i += 1
+			elif timestamps[0][i][0] > timestamps[1][j][0]:
+				rh_now = timestamps[1][j][1]
+				j += 1
+			else:
+				lh_now = timestamps[0][i][1]
+				i += 1
+				rh_now = timestamps[1][j][1]
+				j += 1
+
+		makespan = max(agent_time) + interference_PUN
 
 		return makespan
    
@@ -421,13 +474,14 @@ class GASolver():
 		print(f"Best fit: \n-----\t", self.Tbest)
 		print(f"Best OHT sequence: \n-----\t", self.seq_best[:-1])
 		print(f"Best choice of agent: \n-----\t", [AGENT[ag] for ag in self.alloc_best])
+		print(self.pop_fit_list)
 
 		for oht_id in self.seq_best[:-1]: ## not showing END node
       
 			## Use already calculated data when scheduling second binded OHT
 			agent = self.alloc_best[oht_id]
 			oht = self.oht_list[oht_id]
-			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
+			process_time = int(oht.get_oht_time(agent_POS, agent, self.POS, self.MTM))
    
 			if bind_is_scheduled:
 				end_time = bind_end_time
@@ -444,22 +498,16 @@ class GASolver():
     
 				## Find the end time of bind OHT
 				bind_agent = self.alloc_best[self.oht_list[oht_id].bind.id]
-				bind_process_time = int(oht.bind.get_oht_time(bind_agent, agent_POS, self.POS, self.MTM))
+				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent, self.POS, self.MTM))
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
 				bind_is_scheduled = True
-				
 				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
-    
-				## Add punishment when using same agent
-				punishment = 0
-				if agent == bind_agent:
-					punishment = 2000
 
-				bind_end_time = max(end_time, bind_end_time) + punishment
-				end_time = max(end_time, bind_end_time) + punishment
-    
+				end_time = max(end_time, bind_end_time)
+				bind_end_time = max(end_time, bind_end_time)
+
 			## Normal OHT with previous OHT
 			elif self.oht_list[oht_id].prev:
 				## oht start time should be bigger than every previous oht

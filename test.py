@@ -30,3 +30,8 @@ del b
 print(a.next)
 print(c.next)
 print(d)
+
+
+e = [('a', 1), ('a', 2)]
+f = dict(e)
+print(f)

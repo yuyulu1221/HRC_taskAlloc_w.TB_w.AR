@@ -28,7 +28,7 @@ class Therblig(object):
         self.end: float
         self.From = From
         self.To = To
-        self.Type = Type
+        self.Type = Type # difficulty
         self.Obj1 = Obj1
         self.Obj2 = Obj2
         self.time: float
@@ -38,17 +38,22 @@ class Therblig(object):
     def __repr__(self):
         return f"#{str(self.name)}"
     
-    def get_tb_time(self, agent, agent_POS, POS, MTM):
+    def get_tb_time(self, agent_pos, agent, POS, MTM):
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.name in ["R", "M"]:
-            dist = (np.linalg.norm(POS[self.To] - POS[AGENT[agent]]) + 2) // 2 * 2
-            # set agent to new position
-            agent_POS[AGENT[agent]] = POS[self.To]
-            dist = dist if dist < 28 else 28
+            dist = (np.linalg.norm(POS[self.To] - agent_pos[AGENT[agent]]) + 2) // 2 * 2
+            dist = 28 if dist > 28 else dist
             return MTM.at[self.name + str(int(dist)) + self.Type, AGENT[agent]]
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
         else:
             return MTM.at[self.name, AGENT[agent]]
+        
+    def get_timestamp(self, oht_t, POS):
+        if self.name in ["R", "M"]:
+            return [(oht_t, POS[self.To])]
+        else:
+            return []
+
 
 #%% 動素序列
 class RawTherbligList(object):
@@ -79,6 +84,7 @@ class OHT:
         self.next = []
         self.prev = []
         self.bind = -1
+        self.To: str
         # self.is_scheduled = False
             
     def __repr__(self):
@@ -94,12 +100,28 @@ class OHT:
     def add_prev(self, p):
         self.prev.append(p)
     
-    def get_oht_time(self, agent, agent_pos, pos, mtm):
+    def get_oht_time(self, agent_pos, agent, POS, MTM):
         # print("????")
         oht_t = 0
+        local_agent_pos = copy.copy(agent_pos)
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(agent, agent_pos, pos, mtm)
+            oht_t += tb.get_tb_time(local_agent_pos, agent, POS, MTM)
+            local_agent_pos[agent] = POS[tb.To]
         return oht_t
+    
+    def get_timestamp(self, agent_pos, agent, POS, MTM):
+        oht_t = 0
+        timestamps = []
+        local_agent_pos = copy.copy(agent_pos)
+        for tb in self.tb_list:
+            oht_t += tb.get_tb_time(local_agent_pos, agent, POS, MTM)
+            timestamps += tb.get_timestamp(oht_t, POS)
+            local_agent_pos[agent] = POS[tb.To]
+        return timestamps
+    
+    def renew_agent_pos(self, agent_pos, agent, pos):
+        for tb in self.tb_list:
+            agent_pos[agent] = pos[tb.To]
         
 #%% TBHandler
 class TBHandler(object):
