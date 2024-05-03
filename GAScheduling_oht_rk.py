@@ -80,7 +80,7 @@ class GASolver():
 		self.rk_pop_list = []
 		self.alloc_pop_list = []
   
-		self.PUN_val = 2000
+		self.PUN_val = 10000
   
 	def run(self):
 		self.init_pop()
@@ -251,7 +251,7 @@ class GASolver():
 				return find_bind_oht(oht)
 
 		def find_bind_oht(oht: OHT):
-			if oht.bind == -1:
+			if oht.bind == None:
 				return oht.id
 			else:
 				return find_prev_oht(oht.bind)
@@ -277,7 +277,7 @@ class GASolver():
 			is_scheduled[todo_id] = True
    
 			## add bind oht id to output if it exists
-			if oht_list[todo_id].bind != -1:
+			if oht_list[todo_id].bind != None:
 				output.append(oht_list[todo_id].bind.id)
 				is_scheduled[oht_list[todo_id].bind.id] = True
 
@@ -360,7 +360,7 @@ class GASolver():
 				bind_is_scheduled = False
 
 			## For scheduling first binded OHT 
-			elif self.oht_list[oht_id].bind != -1:
+			elif self.oht_list[oht_id].bind != None:
 
 				## Find the end time of current OHT
 				job_time = 0
@@ -455,6 +455,14 @@ class GASolver():
 				j += 1
 
 		makespan = max(agent_time) + interference_PUN
+  
+		## Verify interference punishment
+		# if makespan < self.PUN_val:
+		# 	print(pop)
+		# 	print(makespan)
+		# 	print(timestamps[0])
+		# 	print(timestamps[1])
+		# 	input()
 
 		return makespan
    
@@ -480,15 +488,15 @@ class GASolver():
       
 			## Use already calculated data when scheduling second binded OHT
 			agent = self.alloc_best[oht_id]
-			oht = self.oht_list[oht_id]
+			oht:OHT = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent_POS, agent, self.POS, self.MTM))
-   
+			oht.renew_agent_pos(agent_POS, agent, self.POS)
 			if bind_is_scheduled:
 				end_time = bind_end_time
 				bind_is_scheduled = False
     
 			## For scheduling first binded OHT 
-			elif self.oht_list[oht_id].bind != -1:
+			elif self.oht_list[oht_id].bind != None:
 				
 				## Find the end time of current OHT
 				job_time = 0
@@ -499,6 +507,7 @@ class GASolver():
 				## Find the end time of bind OHT
 				bind_agent = self.alloc_best[self.oht_list[oht_id].bind.id]
 				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent, self.POS, self.MTM))
+				oht.bind.renew_agent_pos(agent_POS, agent, self.POS)
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)

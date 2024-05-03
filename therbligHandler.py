@@ -1,4 +1,5 @@
 #%% 
+from math import nan
 import numpy as np
 import pandas as pd
 import copy
@@ -68,7 +69,7 @@ class RawTherbligList(object):
             therblig = Therblig(
                 Name = row["Name"], 
                 From = row["From"], 
-                To = row["To"], 
+                To = row["To"] if not pd.isna(row["To"]) else None, 
                 Type = row["Type"],
                 Obj1 = row["Obj1"], 
                 Obj2 = row["Obj2"]
@@ -79,11 +80,11 @@ class RawTherbligList(object):
 #%% 單手任務
 class OHT:
     def __init__(self, ls:list):
-        self.id = -1
-        self.tb_list = ls
-        self.next = []
-        self.prev = []
-        self.bind = -1
+        self.id:int = -1
+        self.tb_list:list = ls
+        self.next:list = []
+        self.prev:list = []
+        self.bind:OHT = None
         self.To: str
         # self.is_scheduled = False
             
@@ -106,7 +107,8 @@ class OHT:
         local_agent_pos = copy.copy(agent_pos)
         for tb in self.tb_list:
             oht_t += tb.get_tb_time(local_agent_pos, agent, POS, MTM)
-            local_agent_pos[agent] = POS[tb.To]
+            if tb.name in ['R', 'M']:
+                local_agent_pos[agent] = POS[tb.To]
         return oht_t
     
     def get_timestamp(self, agent_pos, agent, POS, MTM):
@@ -116,12 +118,14 @@ class OHT:
         for tb in self.tb_list:
             oht_t += tb.get_tb_time(local_agent_pos, agent, POS, MTM)
             timestamps += tb.get_timestamp(oht_t, POS)
-            local_agent_pos[agent] = POS[tb.To]
+            if tb.name in ['R', 'M']:
+                local_agent_pos[agent] = POS[tb.To]
         return timestamps
     
     def renew_agent_pos(self, agent_pos, agent, pos):
         for tb in self.tb_list:
-            agent_pos[agent] = pos[tb.To]
+            if tb.name in ['R', 'M']:
+                agent_pos[AGENT[agent]] = pos[tb.To]
         
 #%% TBHandler
 class TBHandler(object):
@@ -149,9 +153,9 @@ class TBHandler(object):
             else:
                 tmp = []
                 for tb in tbs.list:
-                    if len(tmp) != 0:
-                        if (tmp[-1].name == "A" or tmp[-1].name == "DA") and tb.name != "RL":
-                            raise ValueError("Invalid therblig list")  
+                    # if len(tmp) != 0:
+                    #     if (tmp[-1].name == "A" or tmp[-1].name == "DA") and tb.name != "RL":
+                    #         raise ValueError("Invalid therblig list")  
                     tmp.append(tb)
                     if tb.name == "RL":
                         # self.list.append(tmp.copy())
