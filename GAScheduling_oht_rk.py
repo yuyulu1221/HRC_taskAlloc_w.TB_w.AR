@@ -1,4 +1,5 @@
 #%% importing required modules
+from math import inf
 from multiprocessing import process
 from operator import index
 import pandas as pd
@@ -80,7 +81,7 @@ class GASolver():
 		self.rk_pop_list = []
 		self.alloc_pop_list = []
   
-		self.PUN_val = 10000
+		self.PUN_val = 100000
   
 	def run(self):
 		self.init_pop()
@@ -347,7 +348,7 @@ class GASolver():
 		bind_is_scheduled = False
 		bind_end_time = 0
   
-		timestamps = [[], []]
+		timestamps = [[], [], []]
 		# timestamps = [{}, {}, {}]
 
 		for oht_id in pop:
@@ -386,18 +387,16 @@ class GASolver():
 				bind_end_time = max(end_time, bind_end_time) + same_agent_PUN
 				end_time = max(end_time, bind_end_time) + same_agent_PUN
 
-				if agent == 0 or agent == 1:
-					start_time = end_time - process_time
-					tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
-					for t, pos in tmp:
-						timestamps[agent].append((start_time + t, pos))
+				start_time = end_time - process_time
+				tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
+				for t, pos in tmp:
+					timestamps[agent].append((start_time + t, pos))
 				oht.renew_agent_pos(agent_POS, agent, self.POS)
 
-				if bind_agent == 0 or bind_agent == 1:
-					bind_start_time = bind_end_time - bind_process_time
-					tmp = oht.get_timestamp(agent_POS, bind_agent, self.POS, self.MTM)
-					for t, pos in tmp:
-						timestamps[bind_agent].append((bind_start_time + t, pos))
+				bind_start_time = bind_end_time - bind_process_time
+				tmp = oht.get_timestamp(agent_POS, bind_agent, self.POS, self.MTM)
+				for t, pos in tmp:
+					timestamps[bind_agent].append((bind_start_time + t, pos))
 				oht.bind.renew_agent_pos(agent_POS, bind_agent, self.POS)
 
 			## Normal OHT with previous OHT
@@ -406,10 +405,9 @@ class GASolver():
 				start_time = max(agent_time[agent], job_time)
 				end_time = start_time + process_time
 
-				if agent == 0 or agent == 1:
-					tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
-					for t, pos in tmp:
-						timestamps[agent].append((start_time + t, pos))
+				tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
+				for t, pos in tmp:
+					timestamps[agent].append((start_time + t, pos))
 				oht.renew_agent_pos(agent_POS, agent, self.POS)
 
 			## Normal OHT without previous OHT
@@ -417,10 +415,9 @@ class GASolver():
 				start_time = agent_time[agent]
 				end_time = start_time + process_time
 	
-				if agent == 0 or agent == 1:
-					tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
-					for t, pos in tmp:
-						timestamps[agent].append((start_time + t, pos))
+				tmp = oht.get_timestamp(agent_POS, agent, self.POS, self.MTM)
+				for t, pos in tmp:
+					timestamps[agent].append((start_time + t, pos))
 				oht.renew_agent_pos(agent_POS, agent, self.POS)
 
 			agent_oht_id[agent].append(oht_id)
@@ -428,31 +425,79 @@ class GASolver():
 			oht_end_time[oht_id] = end_time
 
 		## Handle interference problem
-		i, j = 0, 0
-		lh_now, rh_now = self.POS['LH'], self.POS['RH']
+		i, j, k = 0, 0, 0
+		lh_now, rh_now, bot_now = self.POS['LH'], self.POS['RH'], self.POS['BOT']
 		interference_PUN = 0
 		## Compare the x-coord of LH and RH
-		while i < len(timestamps[0]) or j < len(timestamps[1]):
-			if lh_now[0] > rh_now[0]:
+		while i < len(timestamps[0]) or j < len(timestamps[1]) or k < len(timestamps[2]):
+			if lh_now[0] > rh_now[0] \
+   			or lh_now[2] > bot_now[2] \
+      		or rh_now[2] > bot_now[2]:
 				interference_PUN = self.PUN_val
 				break
-			if j >= len(timestamps[1]):
-				lh_now = timestamps[0][i][1]
-				i += 1
-			elif i >= len(timestamps[0]):
-				rh_now = timestamps[1][j][1]
-				j += 1
-			elif timestamps[0][i][0] < timestamps[1][j][0]:
-				lh_now = timestamps[0][i][1]
-				i += 1
-			elif timestamps[0][i][0] > timestamps[1][j][0]:
-				rh_now = timestamps[1][j][1]
-				j += 1
+   	
+			if i >= len(timestamps[0]):
+				if j >= len(timestamps[1]):
+					bot_now = timestamps[2][k][1]
+					k += 1
+				elif k >= len(timestamps[2]):
+					rh_now = timestamps[1][j][1]
+					j += 1
+				else:
+					if timestamps[1][j][0] < timestamps[2][k][0]:
+						rh_now = timestamps[1][j][1]
+						j += 1 
+					elif timestamps[1][j][0] > timestamps[2][k][0]:
+						bot_now = timestamps[2][k][1]
+						k += 1
+					else:
+						rh_now = timestamps[1][j][1]
+						j += 1 
+						bot_now = timestamps[2][k][1]
+						k += 1
+			elif j >= len(timestamps[1]):
+				if k >= len(timestamps[2]):	
+					lh_now = timestamps[0][i][1]
+					i += 1
+				else:
+					if timestamps[0][i][0] < timestamps[2][k][0]:
+						lh_now = timestamps[0][i][1]
+						i += 1 
+					elif timestamps[0][i][0] > timestamps[2][k][0]:
+						bot_now = timestamps[2][k][1]
+						k += 1 
+					else:
+						lh_now = timestamps[0][i][1]
+						i += 1 
+						bot_now = timestamps[2][k][1]
+						k += 1 
+			elif k >= len(timestamps[2]):
+				if timestamps[0][i][0] < timestamps[1][j][0]:
+					lh_now = timestamps[0][i][1]
+					i += 1 
+				elif timestamps[0][i][0] < timestamps[1][j][0]:
+					rh_now = timestamps[1][j][1]
+					j += 1 
+				else:
+					lh_now = timestamps[0][i][1]
+					i += 1 
+					rh_now = timestamps[1][j][1]
+					j += 1 
 			else:
-				lh_now = timestamps[0][i][1]
-				i += 1
-				rh_now = timestamps[1][j][1]
-				j += 1
+				if timestamps[0][i][0] < min(timestamps[1][j][0], timestamps[2][k][0]):
+					lh_now = timestamps[0][i][1]
+					i += 1
+				elif timestamps[1][j][0] < min(timestamps[0][i][0], timestamps[2][k][0]):
+					rh_now = timestamps[1][j][1]
+					j += 1
+				elif timestamps[2][k][0] < min(timestamps[0][i][0], timestamps[1][j][0]):
+					bot_now = timestamps[2][k][1]
+					k += 1
+				else:
+					lh_now = timestamps[0][i][1]
+					i += 1
+					rh_now = timestamps[1][j][1]
+					j += 1
 
 		makespan = max(agent_time) + interference_PUN
   
@@ -462,11 +507,13 @@ class GASolver():
 		# 	print(makespan)
 		# 	print(timestamps[0])
 		# 	print(timestamps[1])
+		# 	print(timestamps[2])
 		# 	input()
 
 		return makespan
    
 	def gantt_chart(self):
+     
 		agent_time = [0 for _ in range(self.num_agent)]
 		agent_POS = {
 			"LH": self.POS["LH"],
@@ -483,6 +530,10 @@ class GASolver():
 		print(f"Best OHT sequence: \n-----\t", self.seq_best[:-1])
 		print(f"Best choice of agent: \n-----\t", [AGENT[ag] for ag in self.alloc_best])
 		print(self.pop_fit_list)
+  
+		if self.Tbest >= self.PUN_val:
+			print("No valid solution!")
+			return
 
 		for oht_id in self.seq_best[:-1]: ## not showing END node
       
