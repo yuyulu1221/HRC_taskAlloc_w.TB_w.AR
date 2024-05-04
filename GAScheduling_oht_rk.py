@@ -1,14 +1,10 @@
 #%% importing required modules
 from math import inf
-from multiprocessing import process
-from operator import index
 import pandas as pd
 import numpy as np
 import copy
 import plotly.express as px
 from datetime import timedelta
-
-from pyparsing import col
 
 from therbligHandler import *
 # from InfoHandler import *
@@ -31,7 +27,7 @@ def read_MTM():
 #%% read OHT relation
 def read_OHT_relation(oht_list):
 	ohtr_df = pd.read_excel(data, sheet_name="OHT Relation", index_col=0)
-	print(ohtr_df)
+	# print(ohtr_df)
  
 	for row_id in range(ohtr_df.shape[0]):
 		for col_id in range(ohtr_df.shape[1]):
@@ -46,7 +42,7 @@ def read_OHT_relation(oht_list):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, oht_list):
+	def __init__(self, oht_list, pop_size=100, num_iter=110, crossover_rate=0.7, mutation_rate=0.01):
 		
   		# Get position dict -> str: np.array_1x3
 		self.POS = read_POS()
@@ -54,11 +50,12 @@ class GASolver():
 		self.MTM = read_MTM()
 		# Get OHT relation
 		self.oht_list = read_OHT_relation(oht_list)
-  
-		for oht in self.oht_list:
-			print("---")
-			print(f"OHT{oht.id}")
-			print(f"prev: {[oht_p.id for oht_p in oht.prev]}")
+
+		## Check oht graph
+		# for oht in self.oht_list:
+		# 	print("---")
+		# 	print(f"OHT{oht.id}")
+		# 	print(f"prev: {[oht_p.id for oht_p in oht.prev]}")
 
 		self.num_oht = len(oht_list)
   
@@ -68,14 +65,16 @@ class GASolver():
 		self.num_agent = 3
 
 		# Hyper-paremeters
-		self.pop_size=int(input('Please input the size of population: ') or 128) 
-		self.parent_selection_rate = 0.8
-		self.crossover_rate = 0.8
-		self.mutation_rate = 0.08
+		# self.pop_size=int(input('Please input the size of population: ') or 128) 
+		self.pop_size=int(pop_size) 
+		# self.num_iter=int(input('Please input number of iteration: ') or 500) 
+		self.num_iter=int(num_iter) 
+		self.parent_selection_rate = 0.6
+		self.crossover_rate = crossover_rate
+		self.mutation_rate = mutation_rate
 		mutation_selection_rate = 0.2
 		self.num_mutation_pos = round(self.num_oht * mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 500) 
-			
+		
 		self.pop_list = []
 		self.pop_fit_list = []
 		self.rk_pop_list = []
@@ -91,7 +90,9 @@ class GASolver():
 			offspring, rk_offspring, alloc_offspring = self.crossover(parent, rk_parent)
 			self.replacement(offspring, rk_offspring, alloc_offspring)
 			self.progress_bar(it)
-		self.gantt_chart()
+		print("\n")
+		# self.gantt_chart()
+		return self.Tbest
    
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
@@ -324,7 +325,10 @@ class GASolver():
 		bar_cnt = (int(((n+1)/self.num_iter)*20))
 		space_cnt = 20 - bar_cnt		
 		bar = "▇" * bar_cnt + " " * space_cnt
-		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_local = {self.Tbest_local}, T-best = {self.Tbest}", end="")
+		if n+1 == self.num_iter:
+			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_local = {self.Tbest_local}, T-best = {self.Tbest}")
+		else:
+			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_local = {self.Tbest_local}, T-best = {self.Tbest}", end="")
    
 	def cal_makespan(self, pop:list, alloc_pop:list):
 		"""
@@ -349,7 +353,6 @@ class GASolver():
 		bind_end_time = 0
   
 		timestamps = [[], [], []]
-		# timestamps = [{}, {}, {}]
 
 		for oht_id in pop:
 			agent = alloc_pop[oht_id]

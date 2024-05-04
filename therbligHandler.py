@@ -170,14 +170,12 @@ class TBHandler(object):
     def set_oht_id(self):
         for id, oht in enumerate(self.OHT_list):
             oht.set_id(id)
-        for oht in self.OHT_list:
-            print("id: ", oht.id)
      
     def run(self):
         self.save_tbs()
         self.read_tbs()
         self.set_oht_id()
-        print(self.OHT_list)
+        # print(self.OHT_list)
 
 
 
