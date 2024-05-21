@@ -57,7 +57,7 @@ class Therblig(object):
 
 
 #%% 動素序列
-class RawTherbligList(object):
+class RawTherbligs(object):
     def __init__(self, Pos):
         self.list = []
         self.Pos = Pos
@@ -65,7 +65,7 @@ class RawTherbligList(object):
         return ", ".join(map(str, self.list))
         
     def read(self, df: pd.DataFrame):
-        for idx, row in df.iterrows():
+        for _, row in df.iterrows():
             therblig = Therblig(
                 Name = row["Name"], 
                 From = row["From"], 
@@ -89,8 +89,8 @@ class OHT:
         # self.is_scheduled = False
             
     def __repr__(self):
-        return "(" + ", ".join(map(str, self.tb_list)) + ")"
-        # return f"OHT{self.id}"
+        # return "(" + ", ".join(map(str, self.tb_list)) + ")"
+        return f"OHT{self.id}"
     
     def set_id(self, id):
         self.id = id
@@ -129,46 +129,57 @@ class OHT:
         
 #%% TBHandler
 class TBHandler(object):
-    def __init__(self):
+    def __init__(self, num_tbs, id):
         self.Pos = {}
-        self.tbsl:RawTherbligList
-        self.tbsr:RawTherbligList
-        self.OHT_list = []
+        self.tbsl:RawTherbligs
+        self.tbsr:RawTherbligs
+        self.num_tbs = num_tbs
+        self.id = id
+        self.tbs_list = []
+        self.job_list = []
+        self.oht_list = []
     
     ## Save tbs by list
     def save_tbs(self):
-        self.tbsl = RawTherbligList(self.Pos) # save pos
-        tbsl_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(L)")   
-        self.tbsl.read(tbsl_df)
+        for i in range(1, self.num_tbs+1):
+            tmp = RawTherbligs(self.Pos)
+            tbs_df = pd.read_excel(f"data/data_{self.id}.xlsx", sheet_name=f"Therbligs{i}")
+            tmp.read(tbs_df)
+            self.tbs_list.append(tmp)
         
-        self.tbsr = RawTherbligList(self.Pos)
-        tbsr_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(R)")   
-        self.tbsr.read(tbsr_df)
+        # self.tbsl = RawTherbligs(self.Pos) # save pos
+        # tbsl_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(L)")   
+        # self.tbsl.read(tbsl_df)
+        
+        # self.tbsr = RawTherbligs(self.Pos)
+        # tbsr_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(R)")   
+        # self.tbsr.read(tbsr_df)
         
     ## Convert tbs to oht    
     def read_tbs(self):
-        for tbs in (self.tbsl, self.tbsr):
-            if not isinstance(tbs, RawTherbligList):
+        for tbs in self.tbs_list:
+            if not isinstance(tbs, RawTherbligs):
                 continue
-            else:
-                tmp = []
-                for tb in tbs.list:
-                    # if len(tmp) != 0:
-                    #     if (tmp[-1].name == "A" or tmp[-1].name == "DA") and tb.name != "RL":
-                    #         raise ValueError("Invalid therblig list")  
-                    tmp.append(tb)
-                    if tb.name == "RL":
-                        # self.list.append(tmp.copy())
-                        self.OHT_list.append(OHT(tmp.copy()))
-                        tmp.clear()
+            job = []
+            tmp = []
+            for tb in tbs.list:
+                tmp.append(tb)
+                if tb.name == "RL":
+                    # self.list.append(tmp.copy())
+                    oht = OHT(tmp.copy())
+                    self.oht_list.append(oht)
+                    job.append(oht)
+                    tmp.clear()
+            self.job_list.append(job)
+
         # Use dummy node to represent "END"
-        self.OHT_list.append(OHT([]))
+        self.oht_list.append(OHT([]))
                         
     def get_oht_time(self, oht_id, Pos):
-        self.OHT_list[oht_id].get_oht_time(Pos)
+        self.oht_list[oht_id].get_oht_time(Pos)
            
     def set_oht_id(self):
-        for id, oht in enumerate(self.OHT_list):
+        for id, oht in enumerate(self.oht_list):
             oht.set_id(id)
      
     def run(self):

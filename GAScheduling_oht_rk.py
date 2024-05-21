@@ -9,24 +9,22 @@ from datetime import timedelta
 from therbligHandler import *
 # from InfoHandler import *
 
-data = "data2.xlsx"
-
 #%% read position
-def read_POS():
-	pos_df = pd.read_excel(data, sheet_name="Position")
+def read_POS(id):
+	pos_df = pd.read_excel(f"./data/position_{id}.xlsx")
 	Pos = {}
-	for idx, pos in pos_df.iterrows():
+	for _, pos in pos_df.iterrows():
 		Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
 	return Pos
 
 #%% read MTM
-def read_MTM():
-	mtm_df = pd.read_excel(data, sheet_name="Therblig Process Time", index_col=0)
+def read_MTM(id):
+	mtm_df = pd.read_excel(f"./data/therblig_process_time.xlsx", index_col=0)
 	return mtm_df
 
 #%% read OHT relation
-def read_OHT_relation(oht_list):
-	ohtr_df = pd.read_excel(data, sheet_name="OHT Relation", index_col=0)
+def read_OHT_relation(oht_list, id):
+	ohtr_df = pd.read_excel(f"./data/oht_relation_{id}.xlsx", index_col=0)
 	# print(ohtr_df)
  
 	for row_id in range(ohtr_df.shape[0]):
@@ -42,14 +40,14 @@ def read_OHT_relation(oht_list):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, oht_list, pop_size=100, num_iter=110, crossover_rate=0.7, mutation_rate=0.01):
+	def __init__(self, id, oht_list, pop_size=100, num_iter=110, crossover_rate=0.7, mutation_rate=0.01):
 		
   		# Get position dict -> str: np.array_1x3
-		self.POS = read_POS()
+		self.POS = read_POS(id)
 		# Get MTM dataframe
-		self.MTM = read_MTM()
+		self.MTM = read_MTM(id)
 		# Get OHT relation
-		self.oht_list = read_OHT_relation(oht_list)
+		self.oht_list = read_OHT_relation(oht_list, id)
 
 		## Check oht graph
 		# for oht in self.oht_list:
@@ -91,7 +89,7 @@ class GASolver():
 			self.replacement(offspring, rk_offspring, alloc_offspring)
 			self.progress_bar(it)
 		print("\n")
-		# self.gantt_chart()
+		self.gantt_chart()
 		return self.Tbest
    
 	def init_pop(self) -> None:
