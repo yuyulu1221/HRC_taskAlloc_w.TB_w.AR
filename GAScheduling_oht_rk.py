@@ -40,8 +40,9 @@ def read_OHT_relation(oht_list, id):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=100, num_iter=110, crossover_rate=0.7, mutation_rate=0.01):
+	def __init__(self, id, oht_list, pop_size=100, num_iter=100, crossover_rate=0.7, mutation_rate=0.01):
 		
+		self.procedure_id = id
   		# Get position dict -> str: np.array_1x3
 		self.POS = read_POS(id)
 		# Get MTM dataframe
@@ -89,7 +90,7 @@ class GASolver():
 			self.replacement(offspring, rk_offspring, alloc_offspring)
 			self.progress_bar(it)
 		print("\n")
-		self.gantt_chart()
+		self.show_result()
 		return self.Tbest
    
 	def init_pop(self) -> None:
@@ -425,18 +426,35 @@ class GASolver():
 			agent_time[agent] = end_time
 			oht_end_time[oht_id] = end_time
 
-		## Handle interference problem
+		
+		
+		makespan = max(agent_time) + self.interference_PUN(timestamps)
+		## Verify interference punishment
+		# if makespan < self.PUN_val:
+		# 	print(pop)
+		# 	print(makespan)
+		# 	print(timestamps[0])
+		# 	print(timestamps[1])
+		# 	print(timestamps[2])
+		# 	input()
+
+		return makespan
+
+	def interference_PUN(self, timestamps):
+     	## Handle interference problem
 		i, j, k = 0, 0, 0
 		lh_now, rh_now, bot_now = self.POS['LH'], self.POS['RH'], self.POS['BOT']
-		interference_PUN = 0
-		## Compare the x-coord of LH and RH
+		pun = 0
+  
+		## Compare the x-coord of LH and RH; compare the z_coord of robot and hands
 		while i < len(timestamps[0]) or j < len(timestamps[1]) or k < len(timestamps[2]):
+			## Check interference
 			if lh_now[0] > rh_now[0] \
    			or lh_now[2] > bot_now[2] \
       		or rh_now[2] > bot_now[2]:
-				interference_PUN = self.PUN_val
+				pun = self.PUN_val
 				break
-   	
+			## Renew agent position
 			if i >= len(timestamps[0]):
 				if j >= len(timestamps[1]):
 					bot_now = timestamps[2][k][1]
@@ -499,21 +517,12 @@ class GASolver():
 					i += 1
 					rh_now = timestamps[1][j][1]
 					j += 1
+		return pun
 
-		makespan = max(agent_time) + interference_PUN
-  
-		## Verify interference punishment
-		# if makespan < self.PUN_val:
-		# 	print(pop)
-		# 	print(makespan)
-		# 	print(timestamps[0])
-		# 	print(timestamps[1])
-		# 	print(timestamps[2])
-		# 	input()
-
-		return makespan
+		
+		
    
-	def gantt_chart(self):
+	def show_result(self):
      
 		agent_time = [0 for _ in range(self.num_agent)]
 		agent_POS = {
@@ -521,7 +530,10 @@ class GASolver():
 			"RH": self.POS["RH"],
 			"BOT": self.POS["BOT"]
 		}
-		tmp = []
+  
+		gantt_dict = []
+		path_dict = [[] for _ in range(3)] 
+  
 		oht_end_time = [0 for _ in range(self.num_oht)]
 		bind_is_scheduled = False
 		bind_end_time = 0
@@ -543,13 +555,14 @@ class GASolver():
 			oht:OHT = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent_POS, agent, self.POS, self.MTM))
 			oht.renew_agent_pos(agent_POS, agent, self.POS)
+
+			## Same as cal_makespan
 			if bind_is_scheduled:
 				end_time = bind_end_time
 				bind_is_scheduled = False
     
 			## For scheduling first binded OHT 
 			elif self.oht_list[oht_id].bind != None:
-				
 				## Find the end time of current OHT
 				job_time = 0
 				if self.oht_list[oht_id].prev:
@@ -581,19 +594,33 @@ class GASolver():
 			agent_time[agent] = end_time
 			oht_end_time[oht_id] = end_time
    
-			start_time = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
-			end_time = str(timedelta(seconds = end_time))
-			tmp.append(dict(
-        			Agent = f'{AGENT[agent]}', 
-           			Start = f'2024-05-01 {(str(start_time))}', 
-            		Finish = f'2024-05-01 {(str(end_time))}',
-            		Resource =f'OHT{oht_id}')
+			start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
+			end_time_delta = str(timedelta(seconds = end_time))
+			gantt_dict.append(dict(
+				Agent = f'{AGENT[agent]}', 
+				Start = f'2024-05-21 {(str(start_time_delta))}', 
+				Finish = f'2024-05-21 {(str(end_time_delta))}',
+				Resource =f'OHT{oht_id}')
             	)
-		
-		df = pd.DataFrame(tmp)
+			
+			prefix_time = float(end_time - process_time)
+			for tb in self.oht_list[oht_id].flat():
+				path_dict[agent].append(dict(
+					Name = tb.name,
+					Start = prefix_time,
+					Position = tb.To,
+					time = tb.time
+				))
+				prefix_time += tb.time
 
+		for a, pathd in enumerate(path_dict):
+			path_df = pd.DataFrame(pathd)
+			path_df.to_csv(f"./data/result_{self.procedure_id}_{AGENT[a]}.csv" ,index=False)
+  
+		## Draw gantt chart
+		gantt_df = pd.DataFrame(gantt_dict)
 		fig = px.timeline(
-      		df,
+      		gantt_df,
 			x_start='Start', 
 			x_end='Finish', 
 			y='Agent', 

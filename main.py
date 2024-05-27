@@ -3,13 +3,12 @@ from therbligHandler import *
 import optuna
 
 procedure_id = "final"
-num_tbs = 1
+num_tbs = 6
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)
 tbh.run()
 # print(tbh.job_list)
 print(tbh.oht_list)
-input()
 
 # Simple run
 def simple_run():
@@ -34,6 +33,7 @@ def optuna_run():
 	print('Trial Number: ', study.best_trial.number)
 	print('Parameters: ', study.best_trial.params)
 	print('Values: ', study.best_trial.value)
+	print('para', study.best_trial.user_attrs)
 
 ## Run Method
 simple_run()

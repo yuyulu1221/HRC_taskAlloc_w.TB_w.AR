@@ -32,7 +32,7 @@ class Therblig(object):
         self.Type = Type # difficulty
         self.Obj1 = Obj1
         self.Obj2 = Obj2
-        self.time: float
+        self.time = 0
         # self.next = None
         # self.tb_process_time = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")   
         
@@ -44,7 +44,8 @@ class Therblig(object):
         if self.name in ["R", "M"]:
             dist = (np.linalg.norm(POS[self.To] - agent_pos[AGENT[agent]]) + 2) // 2 * 2
             dist = 28 if dist > 28 else dist
-            return MTM.at[self.name + str(int(dist)) + self.Type, AGENT[agent]]
+            self.time = MTM.at[self.name + str(int(dist)) + self.Type, AGENT[agent]]
+            return self.time
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
         else:
             return MTM.at[self.name, AGENT[agent]]
@@ -121,6 +122,9 @@ class OHT:
             if tb.name in ['R', 'M']:
                 local_agent_pos[agent] = POS[tb.To]
         return timestamps
+    
+    def flat(self):
+        return self.tb_list
     
     def renew_agent_pos(self, agent_pos, agent, pos):
         for tb in self.tb_list:
