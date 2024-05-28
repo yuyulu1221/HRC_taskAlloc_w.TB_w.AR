@@ -3,7 +3,7 @@ from therbligHandler import *
 import optuna
 
 procedure_id = "final"
-num_tbs = 6
+num_tbs = 4
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)
 tbh.run()
@@ -21,7 +21,7 @@ def optuna_run():
 			'pop_size': trial.suggest_int("pop_size", 20, 300, step=40),
 			'num_iter': trial.suggest_int("num_iter", 50, 500, step=50),
 			'crossover_rate': trial.suggest_float("crossover_rate", 0.6, 0.9),
-			'mutation_rate': trial.suggest_float("mutation_rate", 0.01, 0.025)
+			'mutation_rate': trial.suggest_float("mutation_rate", 0.02, 0.025)
 		}
 		solver = GASolver(id, oht_list, **param_grid)
 		Tbest = solver.run()

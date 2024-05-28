@@ -11,21 +11,21 @@ from therbligHandler import *
 
 #%% read position
 def read_POS(id):
-	pos_df = pd.read_excel(f"./data/position_{id}.xlsx")
+	pos_df = pd.read_csv(f"./data/position_{id}.csv")
 	Pos = {}
 	for _, pos in pos_df.iterrows():
 		Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
 	return Pos
 
 #%% read MTM
-def read_MTM(id):
+def read_MTM():
 	mtm_df = pd.read_excel(f"./data/therblig_process_time.xlsx", index_col=0)
 	return mtm_df
 
 #%% read OHT relation
 def read_OHT_relation(oht_list, id):
-	ohtr_df = pd.read_excel(f"./data/oht_relation_{id}.xlsx", index_col=0)
-	# print(ohtr_df)
+	ohtr_df = pd.read_csv(f"./data/oht_relation_{id}.csv", index_col=0)
+	print(ohtr_df)
  
 	for row_id in range(ohtr_df.shape[0]):
 		for col_id in range(ohtr_df.shape[1]):
@@ -40,13 +40,13 @@ def read_OHT_relation(oht_list, id):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=100, num_iter=100, crossover_rate=0.7, mutation_rate=0.01):
+	def __init__(self, id, oht_list, pop_size=100, num_iter=120, crossover_rate=0.7, mutation_rate=0.01):
 		
 		self.procedure_id = id
   		# Get position dict -> str: np.array_1x3
 		self.POS = read_POS(id)
 		# Get MTM dataframe
-		self.MTM = read_MTM(id)
+		self.MTM = read_MTM()
 		# Get OHT relation
 		self.oht_list = read_OHT_relation(oht_list, id)
 
@@ -381,7 +381,7 @@ class GASolver():
 
 				bind_is_scheduled = True
 
-				## Add punishment when using same agent
+				## Add punishment when using same agent at same time
 				same_agent_PUN = 0
 				if agent == bind_agent:
 					same_agent_PUN = self.PUN_val
@@ -518,9 +518,6 @@ class GASolver():
 					rh_now = timestamps[1][j][1]
 					j += 1
 		return pun
-
-		
-		
    
 	def show_result(self):
      
@@ -572,7 +569,7 @@ class GASolver():
 				## Find the end time of bind OHT
 				bind_agent = self.alloc_best[self.oht_list[oht_id].bind.id]
 				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent, self.POS, self.MTM))
-				oht.bind.renew_agent_pos(agent_POS, agent, self.POS)
+				# oht.bind.renew_agent_pos(agent_POS, agent, self.POS)
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
@@ -591,6 +588,7 @@ class GASolver():
 			## Normal OHT without previous OHT
 			else:
 				end_time = agent_time[agent] + process_time
+    
 			agent_time[agent] = end_time
 			oht_end_time[oht_id] = end_time
    
@@ -598,14 +596,15 @@ class GASolver():
 			end_time_delta = str(timedelta(seconds = end_time))
 			gantt_dict.append(dict(
 				Agent = f'{AGENT[agent]}', 
-				Start = f'2024-05-21 {(str(start_time_delta))}', 
-				Finish = f'2024-05-21 {(str(end_time_delta))}',
+				Start = f'2024-05-27 {(str(start_time_delta))}', 
+				Finish = f'2024-05-27 {(str(end_time_delta))}',
 				Resource =f'OHT{oht_id}')
             	)
 			
 			prefix_time = float(end_time - process_time)
 			for tb in self.oht_list[oht_id].flat():
 				path_dict[agent].append(dict(
+					TaskId = oht.id,
 					Name = tb.name,
 					Start = prefix_time,
 					Position = tb.To,

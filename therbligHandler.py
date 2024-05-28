@@ -48,6 +48,7 @@ class Therblig(object):
             return self.time
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
         else:
+            self.time = MTM.at[self.name, AGENT[agent]]
             return MTM.at[self.name, AGENT[agent]]
         
     def get_timestamp(self, oht_t, POS):
@@ -90,8 +91,8 @@ class OHT:
         # self.is_scheduled = False
             
     def __repr__(self):
-        # return "(" + ", ".join(map(str, self.tb_list)) + ")"
-        return f"OHT{self.id}"
+        return "(" + ", ".join(map(str, self.tb_list)) + ")"
+        # return f"OHT{self.id}"
     
     def set_id(self, id):
         self.id = id
