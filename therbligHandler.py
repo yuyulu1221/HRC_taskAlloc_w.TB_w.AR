@@ -1,5 +1,5 @@
 #%% 
-from math import nan
+from math import ceil, nan
 import numpy as np
 import pandas as pd
 import copy
@@ -42,8 +42,20 @@ class Therblig(object):
     def get_tb_time(self, agent_pos, agent, POS, MTM):
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.name in ["R", "M"]:
-            dist = (np.linalg.norm(POS[self.To] - agent_pos[AGENT[agent]]) + 2) // 2 * 2
-            dist = 28 if dist > 28 else dist
+            if self.From == "AGENT":
+                dist = np.linalg.norm(POS[self.To] - POS[agent_pos[agent]])
+            else:
+                dist = np.linalg.norm(POS[self.To] - POS[self.From])
+                
+            if dist == 0:
+                print(f"{self.To}, {self.From}")
+                dist += 2
+            elif dist <= 30:
+                dist = ceil(dist / 2) * 2
+            elif dist <= 80:
+                dist = ceil(dist / 5) * 5
+            else:
+                dist = 80
             self.time = MTM.at[self.name + str(int(dist)) + self.Type, AGENT[agent]]
             return self.time
             # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
@@ -51,11 +63,10 @@ class Therblig(object):
             self.time = MTM.at[self.name, AGENT[agent]]
             return MTM.at[self.name, AGENT[agent]]
         
-    def get_timestamp(self, oht_t, POS):
+    def is_moving_tb(self):
         if self.name in ["R", "M"]:
-            return [(oht_t, POS[self.To])]
-        else:
-            return []
+            return True
+        return False
 
 
 #%% 動素序列
@@ -110,27 +121,26 @@ class OHT:
         for tb in self.tb_list:
             oht_t += tb.get_tb_time(local_agent_pos, agent, POS, MTM)
             if tb.name in ['R', 'M']:
-                local_agent_pos[agent] = POS[tb.To]
+                local_agent_pos[agent] = tb.To
         return oht_t
     
     def get_timestamp(self, agent_pos, agent, POS, MTM):
         oht_t = 0
         timestamps = []
-        local_agent_pos = copy.copy(agent_pos)
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(local_agent_pos, agent, POS, MTM)
-            timestamps += tb.get_timestamp(oht_t, POS)
-            if tb.name in ['R', 'M']:
-                local_agent_pos[agent] = POS[tb.To]
+            oht_t += tb.get_tb_time(agent_pos, agent, POS, MTM)
+            if tb.is_moving_tb(): 
+                timestamps.append((oht_t, POS[tb.To]))
         return timestamps
     
     def flat(self):
         return self.tb_list
     
     def renew_agent_pos(self, agent_pos, agent, pos):
-        for tb in self.tb_list:
+        for tb in self.tb_list[::-1]:
             if tb.name in ['R', 'M']:
-                agent_pos[AGENT[agent]] = pos[tb.To]
+                agent_pos[agent] = tb.To
+                break
         
 #%% TBHandler
 class TBHandler(object):

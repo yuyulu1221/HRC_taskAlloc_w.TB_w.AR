@@ -29,11 +29,11 @@ def read_OHT_relation(oht_list, id):
  
 	for row_id in range(ohtr_df.shape[0]):
 		for col_id in range(ohtr_df.shape[1]):
-			if ohtr_df.iloc[row_id][col_id] == -1:
+			if ohtr_df.iloc[row_id, col_id] == -1:
 				oht_list[row_id].prev.append(oht_list[col_id])
-			elif ohtr_df.iloc[row_id][col_id] == 1:
+			elif ohtr_df.iloc[row_id, col_id] == 1:
 				oht_list[row_id].next.append(oht_list[col_id])
-			elif ohtr_df.iloc[row_id][col_id] == 2:
+			elif ohtr_df.iloc[row_id, col_id] == 2:
 				oht_list[row_id].bind = oht_list[col_id]
     
 	return oht_list
@@ -64,9 +64,7 @@ class GASolver():
 		self.num_agent = 3
 
 		# Hyper-paremeters
-		# self.pop_size=int(input('Please input the size of population: ') or 128) 
 		self.pop_size=int(pop_size) 
-		# self.num_iter=int(input('Please input number of iteration: ') or 500) 
 		self.num_iter=int(num_iter) 
 		self.parent_selection_rate = 0.6
 		self.crossover_rate = crossover_rate
@@ -338,11 +336,7 @@ class GASolver():
 		agent_oht_id = [[] for _ in range(self.num_agent)]
   
 		## Current position for each agent
-		agent_POS = {
-			"LH": self.POS["LH"],
-			"RH": self.POS["RH"],
-			"BOT": self.POS["BOT"]
-		}
+		agent_POS = ["LH", "RH", "BOT"]
 
 		## Record end time of each OHT
 		oht_end_time = [0 for _ in range(self.num_oht)]
@@ -522,11 +516,7 @@ class GASolver():
 	def show_result(self):
      
 		agent_time = [0 for _ in range(self.num_agent)]
-		agent_POS = {
-			"LH": self.POS["LH"],
-			"RH": self.POS["RH"],
-			"BOT": self.POS["BOT"]
-		}
+		agent_POS = ["LH", "RH", "BOT"]
   
 		gantt_dict = []
 		path_dict = [[] for _ in range(3)] 
