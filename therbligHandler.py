@@ -99,6 +99,16 @@ class OHT:
         self.prev:list = []
         self.bind:OHT = None
         self.To: str
+        
+        self.name = "PP"
+        for tb in self.tb_list:
+            if tb.name == "A":
+                self.name = "A"
+                break
+            elif tb.name == "DA":
+                self.name = "A"
+                break
+                
         # self.is_scheduled = False
             
     def __repr__(self):

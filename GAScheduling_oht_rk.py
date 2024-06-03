@@ -40,7 +40,7 @@ def read_OHT_relation(oht_list, id):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=100, num_iter=120, crossover_rate=0.7, mutation_rate=0.01):
+	def __init__(self, id, oht_list, pop_size=160, num_iter=200, crossover_rate=0.7, mutation_rate=0.01):
 		
 		self.procedure_id = id
   		# Get position dict -> str: np.array_1x3
