@@ -27,7 +27,7 @@ def read_MTM():
 #%% read OHT relation
 def read_OHT_relation(oht_list, id):
 	ohtr_df = pd.read_csv(f"./data/oht_relation_{id}.csv", index_col=0)
-	print(ohtr_df)
+	# print(ohtr_df)
  
 	for row_id in range(ohtr_df.shape[0]):
 		for col_id in range(ohtr_df.shape[1]):

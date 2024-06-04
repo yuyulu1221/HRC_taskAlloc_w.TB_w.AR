@@ -18,12 +18,12 @@ def simple_run():
 def optuna_run():
 	def GA_objective(trial, id, oht_list):
 		param_grid = {
-			'pop_size': trial.suggest_int("pop_size", 20, 300, step=40),
-			'num_iter': trial.suggest_int("num_iter", 50, 500, step=50),
+			'pop_size': trial.suggest_int("pop_size", 100, 500, step=50),
+			'num_iter': trial.suggest_int("num_iter", 100, 500, step=50),
 			'crossover_rate': trial.suggest_float("crossover_rate", 0.6, 0.9),
 			'mutation_rate': trial.suggest_float("mutation_rate", 0.01, 0.025),
 			'rk_mutation_rate': trial.suggest_float("rk_mutation_rate", 0.01, 0.025),
-			'rk_iter_change_rate': trial.suggest_float("rk_iter_change_rate", 0.1, 0.8)
+			'rk_iter_change_rate': trial.suggest_float("rk_iter_change_rate", 0.4, 0.8)
 		}
 		solver = GASolver(id, oht_list, **param_grid)
 		Tbest = solver.run()
@@ -38,5 +38,5 @@ def optuna_run():
 	print('para', study.best_trial.user_attrs)
 
 ## Run Method
-simple_run()
-# optuna_run()
+# simple_run()
+optuna_run()
