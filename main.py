@@ -2,8 +2,8 @@ from GAScheduling_oht_rk import *
 from therbligHandler import *
 import optuna
 
-procedure_id = "final"
-num_tbs = 4
+procedure_id = "final2"
+num_tbs = 7
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)
 tbh.run()

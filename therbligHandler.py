@@ -1,8 +1,10 @@
 #%% 
 from math import ceil, nan
+from os import TMP_MAX
 import numpy as np
 import pandas as pd
 import copy
+import dataHandler as dh
 
 #%% Test
 tb_abbr = {
@@ -21,7 +23,7 @@ AGENT = ["LH", "RH", "BOT"]
 
 #%% 動素
 class Therblig(object):
-    def __init__(self, Name:str=None, From:str=None, To:str=None, Type:str=None, Obj1:str=None, Obj2:str=None):
+    def __init__(self, Name:str=None, From:str=None, To:str=None, Type:str=None):
         if tb_abbr.get(Name) == None:
             raise ValueError("This type of therblig is not exist")
         self.name = Name
@@ -29,26 +31,22 @@ class Therblig(object):
         self.end: float
         self.From = From
         self.To = To
-        self.Type = Type # difficulty
-        self.Obj1 = Obj1
-        self.Obj2 = Obj2
+        self.type = Type # difficulty
         self.time = 0
-        # self.next = None
-        # self.tb_process_time = pd.read_excel("data_test.xlsx", sheet_name="Therblig Process Time")   
+        self.prefix_time = 0
         
     def __repr__(self):
-        return f"#{str(self.name)}"
+        return f"#{str(self.name)}"    
     
-    def get_tb_time(self, agent_pos, agent, POS, MTM):
+    def get_tb_time(self, ag_pos, ag_id):
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.name in ["R", "M"]:
             if self.From == "AGENT":
-                dist = np.linalg.norm(POS[self.To] - POS[agent_pos[agent]])
+                dist = np.linalg.norm(dh.POS[self.To] - dh.POS[ag_pos[ag_id]])
             else:
-                dist = np.linalg.norm(POS[self.To] - POS[self.From])
+                dist = np.linalg.norm(dh.POS[self.To] - dh.POS[self.From])
                 
             if dist == 0:
-                print(f"{self.To}, {self.From}")
                 dist += 2
             elif dist <= 30:
                 dist = ceil(dist / 2) * 2
@@ -56,12 +54,12 @@ class Therblig(object):
                 dist = ceil(dist / 5) * 5
             else:
                 dist = 80
-            self.time = MTM.at[self.name + str(int(dist)) + self.Type, AGENT[agent]]
+            self.time = dh.MTM.at[self.name + str(dist) + self.type, AGENT[ag_id]]
             return self.time
-            # return MTM.at[self.type, AGENT[agent]] * np.linalg.norm(POS[self.To] - POS[self.From])
+        
         else:
-            self.time = MTM.at[self.name, AGENT[agent]]
-            return MTM.at[self.name, AGENT[agent]]
+            self.time = dh.MTM.at[self.name, AGENT[ag_id]]
+            return dh.MTM.at[self.name, AGENT[ag_id]]
         
     def is_moving_tb(self):
         if self.name in ["R", "M"]:
@@ -84,8 +82,6 @@ class RawTherbligs(object):
                 From = row["From"], 
                 To = row["To"] if not pd.isna(row["To"]) else None, 
                 Type = row["Type"],
-                Obj1 = row["Obj1"], 
-                Obj2 = row["Obj2"]
             )
             self.list.append(copy.copy(therblig))
 
@@ -98,15 +94,16 @@ class OHT:
         self.next:list = []
         self.prev:list = []
         self.bind:OHT = None
+        self.bind_time = 0
         self.To: str
         
-        self.name = "PP"
+        self.type = "P&P"
         for tb in self.tb_list:
             if tb.name == "A":
-                self.name = "A"
+                self.type = "A"
                 break
             elif tb.name == "DA":
-                self.name = "A"
+                self.type = "A"
                 break
                 
         # self.is_scheduled = False
@@ -124,29 +121,28 @@ class OHT:
     def add_prev(self, p):
         self.prev.append(p)
     
-    def get_oht_time(self, agent_pos, agent, POS, MTM):
-        # print("????")
+    def get_oht_time(self, agent_pos, agent):
         oht_t = 0
         local_agent_pos = copy.copy(agent_pos)
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(local_agent_pos, agent, POS, MTM)
+            oht_t += tb.get_tb_time(local_agent_pos, agent)
             if tb.name in ['R', 'M']:
                 local_agent_pos[agent] = tb.To
         return oht_t
     
-    def get_timestamp(self, agent_pos, agent, POS, MTM):
+    def get_timestamp(self, agent_pos, agent):
         oht_t = 0
         timestamps = []
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(agent_pos, agent, POS, MTM)
+            oht_t += tb.get_tb_time(agent_pos, agent)
             if tb.is_moving_tb(): 
-                timestamps.append((oht_t, POS[tb.To]))
+                timestamps.append((oht_t, dh.POS[tb.To]))
         return timestamps
     
     def flat(self):
         return self.tb_list
     
-    def renew_agent_pos(self, agent_pos, agent, pos):
+    def renew_agent_pos(self, agent_pos, agent):
         for tb in self.tb_list[::-1]:
             if tb.name in ['R', 'M']:
                 agent_pos[agent] = tb.To
@@ -171,14 +167,6 @@ class TBHandler(object):
             tbs_df = pd.read_excel(f"data/data_{self.id}.xlsx", sheet_name=f"Therbligs{i}")
             tmp.read(tbs_df)
             self.tbs_list.append(tmp)
-        
-        # self.tbsl = RawTherbligs(self.Pos) # save pos
-        # tbsl_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(L)")   
-        # self.tbsl.read(tbsl_df)
-        
-        # self.tbsr = RawTherbligs(self.Pos)
-        # tbsr_df = pd.read_excel("data2.xlsx", sheet_name="Therbligs(R)")   
-        # self.tbsr.read(tbsr_df)
         
     ## Convert tbs to oht    
     def read_tbs(self):
