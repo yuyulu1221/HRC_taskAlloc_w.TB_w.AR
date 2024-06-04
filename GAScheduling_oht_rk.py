@@ -42,7 +42,7 @@ def read_OHT_relation(oht_list, id):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=256, num_iter=100, crossover_rate=0.7, mutation_rate=0.01, rk_mutation_rate=0.5):
+	def __init__(self, id, oht_list, pop_size=256, num_iter=100, crossover_rate=0.7, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.5):
 		
 		self.procedure_id = id
   		# Get position dict -> str: np.array_1x3
@@ -74,6 +74,7 @@ class GASolver():
 		mutation_selection_rate = 0.2
 		self.num_mutation_pos = round(self.num_oht * mutation_selection_rate)
 		self.rk_mutation_rate = rk_mutation_rate
+		self.rk_iter_change_rate = rk_iter_change_rate
 		
 		self.pop_list = []
 		self.pop_fit_list = []
@@ -435,7 +436,7 @@ class GASolver():
 		# 	input()
 
 		## Adjust random key
-		if np.random.uniform() < 0.2:
+		if np.random.uniform() < self.rk_iter_change_rate:
 			for i, alc in enumerate(alloc_pop):
 				if alc == np.argmax(agent_time):
 					rk_pop[i][alc] -= abs(np.random.normal())
