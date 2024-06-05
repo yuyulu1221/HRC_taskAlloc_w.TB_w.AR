@@ -28,7 +28,7 @@ def read_OHT_relation(oht_list, id):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=120, num_iter=100, crossover_rate=0.4, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
+	def __init__(self, id, oht_list, pop_size=320, num_iter=200, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   
@@ -148,10 +148,10 @@ class GASolver():
    
 			offspring.append(self.mask_crossover(p0, p1))
 			rk_offspring.append(self.random_key_crossover(rk_p0, rk_p1))
-			offspring.append(p0)
-			rk_offspring.append(self.random_key_autoreproduction(rk_p0))
-			offspring.append(p1)
-			rk_offspring.append(self.random_key_autoreproduction(rk_p1))
+			# offspring.append(p0)
+			# rk_offspring.append(self.random_key_autoreproduction(rk_p0))
+			# offspring.append(p1)
+			# rk_offspring.append(self.random_key_autoreproduction(rk_p1))
    
 		alloc_offspring = [[self.decide_agent(rk) for rk in rk_offspring[idx]] for idx in range(len(rk_offspring))]
 

@@ -18,9 +18,9 @@ def simple_run():
 def optuna_run():
 	def GA_objective(trial, id, oht_list):
 		param_grid = {
-			'pop_size': trial.suggest_int("pop_size", 100, 500, step=50),
-			'num_iter': trial.suggest_int("num_iter", 100, 500, step=50),
-			'crossover_rate': trial.suggest_float("crossover_rate", 0.6, 0.9),
+			'pop_size': trial.suggest_int("pop_size", 200, 700, step=50),
+			'num_iter': trial.suggest_int("num_iter", 200, 700, step=50),
+			'crossover_rate': trial.suggest_float("crossover_rate", 0.6, 1),
 			'mutation_rate': trial.suggest_float("mutation_rate", 0.01, 0.025),
 			'rk_mutation_rate': trial.suggest_float("rk_mutation_rate", 0.01, 0.025),
 			'rk_iter_change_rate': trial.suggest_float("rk_iter_change_rate", 0.4, 0.8)
@@ -30,7 +30,7 @@ def optuna_run():
 		return Tbest
 
 	study = optuna.create_study(directions=["minimize"])
-	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.oht_list), n_trials=160, n_jobs=4)
+	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.oht_list), n_trials=80, n_jobs=2)
 
 	print('Trial Number: ', study.best_trial.number)
 	print('Parameters: ', study.best_trial.params)
@@ -38,5 +38,5 @@ def optuna_run():
 	print('para', study.best_trial.user_attrs)
 
 ## Run Method
-simple_run()
-# optuna_run()
+# simple_run()
+optuna_run()
