@@ -9,20 +9,6 @@ from datetime import timedelta
 
 from therbligHandler import *
 import dataHandler as dh
-# from InfoHandler import *
-
-#%% read position
-def read_POS(id):
-	pos_df = pd.read_csv(f"./data/position_{id}.csv")
-	Pos = {}
-	for _, pos in pos_df.iterrows():
-		Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
-	return Pos
-
-#%% read MTM
-def read_MTM():
-	mtm_df = pd.read_excel(f"./data/therblig_process_time.xlsx", index_col=0)
-	return mtm_df
 
 #%% read OHT relation
 def read_OHT_relation(oht_list, id):
@@ -42,26 +28,16 @@ def read_OHT_relation(oht_list, id):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=256, num_iter=100, crossover_rate=0.7, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.5):
+	def __init__(self, id, oht_list, pop_size=120, num_iter=100, crossover_rate=0.4, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
-  		# Get position dict -> str: np.array_1x3
-		# self.POS = read_POS(id)
-		# # Get MTM dataframe
-		# self.MTM = read_MTM()
+  
 		# Get OHT relation
 		self.oht_list = read_OHT_relation(oht_list, id)
-
-		## Check oht graph
-		# for oht in self.oht_list:
-		# 	print("---")
-		# 	print(f"OHT{oht.id}")
-		# 	print(f"prev: {[oht_p.id for oht_p in oht.prev]}")
-
-		self.num_oht = len(oht_list)
+		self.num_oht = len(oht_list)  
   
 		self.alloc_random_key = [[0.5, 0.5, 0.5] for _ in range(self.num_oht)]
-		self.alloc_res = [0 for _ in range(self.num_oht)]
+		# self.alloc_res = [0 for _ in range(self.num_oht)]
 
 		self.num_agent = 3
 
@@ -88,7 +64,7 @@ class GASolver():
 		for it in range(self.num_iter):
 			self.Tbest_local = 999999999
 			parent, rk_parent = self.selection()
-			offspring, rk_offspring, alloc_offspring = self.crossover(parent, rk_parent)
+			offspring, rk_offspring, alloc_offspring = self.reproduction(parent, rk_parent)
 			self.replacement(offspring, rk_offspring, alloc_offspring)
 			self.progress_bar(it)
 		print("\n")
@@ -161,7 +137,7 @@ class GASolver():
 
 		return parent, rk_parent
    
-	def crossover(self, parents:list, rk_parents:list) -> list:
+	def reproduction(self, parents:list, rk_parents:list) -> list:
 		offspring = []
 		rk_offspring = []
 		for _ in range(round(self.pop_size * self.crossover_rate)):
@@ -172,6 +148,11 @@ class GASolver():
    
 			offspring.append(self.mask_crossover(p0, p1))
 			rk_offspring.append(self.random_key_crossover(rk_p0, rk_p1))
+			offspring.append(p0)
+			rk_offspring.append(self.random_key_autoreproduction(rk_p0))
+			offspring.append(p1)
+			rk_offspring.append(self.random_key_autoreproduction(rk_p1))
+   
 		alloc_offspring = [[self.decide_agent(rk) for rk in rk_offspring[idx]] for idx in range(len(rk_offspring))]
 
 		return offspring, rk_offspring, alloc_offspring
@@ -218,8 +199,16 @@ class GASolver():
 		child = (np.array(parent0) + np.array(parent1)) / 2
 
 		if self.rk_mutation_rate >= np.random.rand():
-			child = [c + np.random.normal() / 10 for c in child]
+			child = [c + np.random.normal() for c in child]
 
+		return child
+
+	def random_key_autoreproduction(self, parent) -> list:
+		child = []
+		for p in parent:
+			p_copy = p.copy()
+			np.random.shuffle(p_copy)
+			child.append(p_copy)
 		return child
     
 	def relation_repairment(self, oht_seq) -> list:
@@ -330,6 +319,13 @@ class GASolver():
 		else:
 			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {self.alloc_best}", end="")
    
+	# def check_takeover(self, pop):
+	# 	for i, id in enumerate(pop):
+	# 		oht = self.oht_list[id]
+	# 		if oht.type in ["A", "DA"]:
+	# 			if oht.next.id
+				
+
 	def cal_makespan(self, pop:list, rk_pop:list, alloc_pop:list):
 		"""
 		Returns:
@@ -354,6 +350,7 @@ class GASolver():
 			agent = alloc_pop[oht_id]
 			oht:OHT = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent_POS, agent))
+			remain_time = oht.get_bind_remain_time(agent_POS, agent)
 
 			if bind_is_scheduled:
 				end_time = bind_end_time
@@ -371,6 +368,7 @@ class GASolver():
 				## Find the end time of bind OHT
 				bind_agent = alloc_pop[self.oht_list[oht_id].bind.id]
 				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent))
+				bind_remain_time = oht.bind.get_bind_remain_time(agent_POS, bind_agent)
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
@@ -383,8 +381,8 @@ class GASolver():
 				if agent == bind_agent:
 					same_agent_PUN = self.PUN_val
 
-				bind_end_time = max(end_time, bind_end_time) + same_agent_PUN
-				end_time = max(end_time, bind_end_time) + same_agent_PUN
+				bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time + same_agent_PUN
+				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time + same_agent_PUN
 
 				start_time = end_time - process_time
 				tmp = oht.get_timestamp(agent_POS, agent)
@@ -436,12 +434,12 @@ class GASolver():
 		# 	input()
 
 		## Adjust random key
-		if np.random.uniform() < self.rk_iter_change_rate:
-			for i, alc in enumerate(alloc_pop):
-				if alc == np.argmax(agent_time):
-					rk_pop[i][alc] -= abs(np.random.normal())
-				else:
-					rk_pop[i][alc] += abs(np.random.normal())
+		# if np.random.uniform() < self.rk_iter_change_rate:
+		# 	for i, alc in enumerate(alloc_pop):
+		# 		if alc == np.argmax(agent_time):
+		# 			rk_pop[i][alc] -= abs(np.random.normal())
+		# 		else:
+		# 			rk_pop[i][alc] += abs(np.random.normal())
 
 		return makespan
 
@@ -552,6 +550,7 @@ class GASolver():
 			agent = self.alloc_best[oht_id]
 			oht:OHT = self.oht_list[oht_id]
 			process_time = int(oht.get_oht_time(agent_POS, agent))
+			remain_time = int(oht.get_bind_remain_time(agent_POS, agent))
 			oht.renew_agent_pos(agent_POS, agent)
 
 			## Same as cal_makespan
@@ -570,14 +569,15 @@ class GASolver():
 				## Find the end time of bind OHT
 				bind_agent = self.alloc_best[self.oht_list[oht_id].bind.id]
 				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent))
+				bind_remain_time = oht.bind.get_bind_remain_time(agent_POS, bind_agent)
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
 				bind_is_scheduled = True
 				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
 
-				end_time = max(end_time, bind_end_time)
-				bind_end_time = max(end_time, bind_end_time)
+				bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
+				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
 
 			## Normal OHT with previous OHT
 			elif self.oht_list[oht_id].prev:

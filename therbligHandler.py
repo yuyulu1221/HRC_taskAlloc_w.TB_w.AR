@@ -32,8 +32,6 @@ class Therblig(object):
         self.From = From
         self.To = To
         self.type = Type # difficulty
-        self.time = 0
-        self.prefix_time = 0
         
     def __repr__(self):
         return f"#{str(self.name)}"    
@@ -96,7 +94,6 @@ class OHT:
         self.bind:OHT = None
         self.bind_time = 0
         self.To: str
-        
         self.type = "P&P"
         for tb in self.tb_list:
             if tb.name == "A":
@@ -121,14 +118,19 @@ class OHT:
     def add_prev(self, p):
         self.prev.append(p)
     
-    def get_oht_time(self, agent_pos, agent):
+    def get_oht_time(self, ag_pos, ag_id):
         oht_t = 0
-        local_agent_pos = copy.copy(agent_pos)
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(local_agent_pos, agent)
-            if tb.name in ['R', 'M']:
-                local_agent_pos[agent] = tb.To
+            oht_t += tb.get_tb_time(ag_pos, ag_id)
         return oht_t
+    
+    def get_bind_remain_time(self, ag_pos, ag_id):
+        rem_t = 0
+        for tb in self.tb_list[::-1]:
+            if tb.name in ['A', 'DA']:
+                break
+            rem_t += tb.get_tb_time(ag_pos, ag_id)
+        return rem_t
     
     def get_timestamp(self, agent_pos, agent):
         oht_t = 0

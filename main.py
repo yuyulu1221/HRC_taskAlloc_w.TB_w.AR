@@ -38,5 +38,5 @@ def optuna_run():
 	print('para', study.best_trial.user_attrs)
 
 ## Run Method
-# simple_run()
-optuna_run()
+simple_run()
+# optuna_run()
