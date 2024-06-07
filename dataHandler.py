@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 
-id = "final2"
+id = "final3"
 
-#%% read position
+## read position
 def read_POS(id):
 	pos_df = pd.read_csv(f"./data/position_{id}.csv")
 	Pos = {}
@@ -14,13 +14,19 @@ def read_POS(id):
 def cal_dist(pos:dict, p1, p2):
 	return np.linalg.norm(pos[p1] - pos[p2])
 
-#%% read MTM
+## Read Methods Time Measurement (Therblig process time)
 def read_MTM():
 	mtm_df = pd.read_excel(f"./data/therblig_process_time.xlsx", index_col=0)
 	return mtm_df
 
+## Read Bot Time Measurement Result (Bot process time)
+def read_BOTM(id):
+	botm_df = pd.read_csv(f"./data/bot_process_time_{id}.csv", index_col=0)
+	return botm_df
+
 POS = read_POS(id)
 MTM = read_MTM()
+BOTM = read_BOTM(id)
 
 # while True:
 # 	tmp = input()

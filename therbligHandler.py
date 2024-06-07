@@ -39,8 +39,17 @@ class Therblig(object):
     def get_tb_time(self, ag_pos, ag_id) -> int:
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.name in ["R", "M"]:
+            if ag_id == 2: # BOT
+                if self.From =="AGENT":
+                    p1 = ag_pos
+                    p1, p2 = sorted([p1, self.To])
+                else:
+                    p1, p2 = sorted([self.From, self.To])
+                self.time = dh.BOTM.at[f"{p1}<->{p2}", "Time"]
+                return int(self.time)
+
             if self.From == "AGENT":
-                dist = np.linalg.norm(dh.POS[self.To] - dh.POS[ag_pos[ag_id]])
+                dist = np.linalg.norm(dh.POS[self.To] - dh.POS[ag_pos])
             else:
                 dist = np.linalg.norm(dh.POS[self.To] - dh.POS[self.From])
             
@@ -130,11 +139,11 @@ class OHT:
             rem_t += tb.get_tb_time(ag_pos, ag_id)
         return rem_t
     
-    def get_timestamp(self, agent_pos, agent):
+    def get_timestamp(self, ag_pos, ag_id):
         oht_t = 0
         timestamps = []
         for tb in self.tb_list:
-            oht_t += tb.get_tb_time(agent_pos, agent)
+            oht_t += tb.get_tb_time(ag_pos, ag_id)
             if tb.is_moving_tb(): 
                 timestamps.append((oht_t, dh.POS[tb.To]))
         return timestamps
@@ -147,6 +156,19 @@ class OHT:
             if tb.name in ['R', 'M']:
                 agent_pos[agent] = tb.To
                 break
+            
+class JOB:
+    def __init__(self, ls:list):
+        self.oht_list = ls
+        self.type = "P&P"
+        for oht in self.oht_list:
+            if oht.type == "A":
+                self.type = "A"
+                break
+            elif oht.type == "DA":
+                self.type = "A"
+                break
+        
         
 #%% TBHandler
 class TBHandler(object):
@@ -183,7 +205,7 @@ class TBHandler(object):
                     self.oht_list.append(oht)
                     job.append(oht)
                     tmp.clear()
-            self.job_list.append(job)
+            self.job_list.append(JOB(job))
 
         # Use dummy node to represent "END"
         self.oht_list.append(OHT([]))

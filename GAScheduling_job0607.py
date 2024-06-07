@@ -27,19 +27,17 @@ def read_OHT_relation(oht_list, id):
 	return oht_list
 
 #%% GASolver
-class GASolver():
-	def __init__(self, id, oht_list, pop_size=120, num_iter=100, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
+class GAJobSolver():
+	def __init__(self, id, job_list, oht_list, pop_size=320, num_iter=200, crossover_rate=0.8, mutation_rate=0.01):
 		
 		self.procedure_id = id
   
 		# Get OHT relation
+		self.job_list = job_list
 		self.oht_list = read_OHT_relation(oht_list, id)
-		self.num_oht = len(oht_list)  
-  
-		self.alloc_random_key = [[0.5, 0.5, 0.5] for _ in range(self.num_oht)]
-		# self.alloc_res = [0 for _ in range(self.num_oht)]
+		self.num_job = len(job_list)  
 
-		self.num_agent = 3
+		self.num_agent = 3 # H, R, HRC
 
 		# Hyper-paremeters
 		self.pop_size=int(pop_size) 
@@ -49,22 +47,135 @@ class GASolver():
 		self.mutation_rate = mutation_rate
 		mutation_selection_rate = 0.2
 		self.num_mutation_pos = round(self.num_oht * mutation_selection_rate)
-		self.rk_mutation_rate = rk_mutation_rate
-		self.rk_iter_change_rate = rk_iter_change_rate
 		
 		self.pop_list = []
 		self.pop_fit_list = []
-		self.rk_pop_list = []
 		self.alloc_pop_list = []
   
 		self.PUN_val = 100000
+
+	def cal_job_time(self):
+		self.job_time = [-1, -1, -1] * self.num_job
   
-	def test(self):
-		pop = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-		alloc_pop = [0, 2, 2, 2, 0, 1, 0, 1, 0, 1]
-		print(self.cal_makespan(pop, alloc_pop))
-		# self.show_result()
+		for ag_id in range(self.num_agent):
+			for job in self.job_list:
+				if ag_id == 0:
+					job_time = max(oht_end_time[])
+					for oht in job:
+							
+       
+						process_time_LH = int(oht.get_oht_time("LH", 0))
+						process_time_RH = int(oht.get_oht_time("RH", 1))
+						if oht.bind != None:
+							pass
+						elif oht.prev != None:
+							job_time = max()	
+						else:
+							
+				elif ag_id == 1:
+					if job.type in ("A", "DA"):
+						continue
   
+	def cal_makespan(self, pop:list, alloc_pop:list):
+		"""
+		Returns:
+			int: makespan calculated by scheduling
+		"""
+		agent_time = [0 for _ in range(self.num_agent)]
+		agent_oht_id = [[] for _ in range(self.num_agent)]
+  
+		## Current position for each agent
+		cur_pos = ["LH", "RH", "BOT"]
+
+		## Record end time of each OHT
+		oht_end_time = [0 for _ in range(self.num_oht)]
+
+		## Special cases: binded OHT is scheduled
+		bind_is_scheduled = False
+		bind_end_time = 0
+  
+		timestamps = [[], [], []]
+
+		for oht_id in pop:
+			ag_id = alloc_pop[oht_id]
+			oht:OHT = self.oht_list[oht_id]
+			process_time = int(oht.get_oht_time(cur_pos[ag_id], ag_id))
+			remain_time = oht.get_bind_remain_time(cur_pos, ag_id)
+
+			if bind_is_scheduled:
+				end_time = bind_end_time
+				bind_is_scheduled = False
+
+			## For scheduling first binded OHT 
+			elif self.oht_list[oht_id].bind != None:
+
+				## Find the end time of current OHT
+				job_time = 0
+				if self.oht_list[oht_id].prev:
+					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
+				end_time = max(agent_time[ag_id], job_time) + process_time
+				
+				## Find the end time of bind OHT
+				bind_agent = alloc_pop[self.oht_list[oht_id].bind.id]
+				bind_process_time = int(oht.bind.get_oht_time(cur_pos, bind_agent))
+				bind_remain_time = oht.bind.get_bind_remain_time(cur_pos, bind_agent)
+				bind_job_time = 0
+				if self.oht_list[oht_id].bind.prev:
+					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
+				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
+
+				bind_is_scheduled = True
+
+				## Add punishment when using same agent at same time
+				same_agent_PUN = 0
+				if ag_id == bind_agent:
+					same_agent_PUN = self.PUN_val
+
+				bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time + same_agent_PUN
+				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time + same_agent_PUN
+
+				start_time = end_time - process_time
+				tmp = oht.get_timestamp(cur_pos, ag_id)
+				for t, pos in tmp:
+					timestamps[ag_id].append((start_time + t, pos))
+				oht.renew_agent_pos(cur_pos, ag_id)
+
+				bind_start_time = bind_end_time - bind_process_time
+				tmp = oht.get_timestamp(cur_pos, bind_agent)
+				for t, pos in tmp:
+					timestamps[bind_agent].append((bind_start_time + t, pos))
+				oht.bind.renew_agent_pos(cur_pos, bind_agent)
+
+			## Normal OHT with previous OHT
+			elif self.oht_list[oht_id].prev:
+       
+				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
+				start_time = max(agent_time[ag_id], job_time)
+				end_time = start_time + process_time
+
+				tmp = oht.get_timestamp(cur_pos, ag_id)
+				for t, pos in tmp:
+					timestamps[ag_id].append((start_time + t, pos))
+				oht.renew_agent_pos(cur_pos, ag_id)
+
+			## Normal OHT without previous OHT
+			else:
+				start_time = agent_time[ag_id]
+				end_time = start_time + process_time
+	
+				tmp = oht.get_timestamp(cur_pos, ag_id)
+				for t, pos in tmp:
+					timestamps[ag_id].append((start_time + t, pos))
+				oht.renew_agent_pos(cur_pos, ag_id)
+
+			agent_oht_id[ag_id].append(oht_id)
+			agent_time[ag_id] = end_time
+			oht_end_time[oht_id] = end_time
+	
+		makespan = max(agent_time) + self.interference_PUN(timestamps)
+
+		return makespan	
+		
 	def run(self):
 		self.init_pop()
 		for it in range(self.num_iter):
@@ -341,7 +452,7 @@ class GASolver():
 		agent_oht_id = [[] for _ in range(self.num_agent)]
   
 		## Current position for each agent
-		cur_pos = ["LH", "RH", "BOT"]
+		agent_POS = ["LH", "RH", "BOT"]
 
 		## Record end time of each OHT
 		oht_end_time = [0 for _ in range(self.num_oht)]
@@ -353,10 +464,10 @@ class GASolver():
 		timestamps = [[], [], []]
 
 		for oht_id in pop:
-			ag_id = alloc_pop[oht_id]
+			agent = alloc_pop[oht_id]
 			oht:OHT = self.oht_list[oht_id]
-			process_time = int(oht.get_oht_time(cur_pos[ag_id], ag_id))
-			remain_time = oht.get_bind_remain_time(cur_pos[ag_id], ag_id)
+			process_time = int(oht.get_oht_time(agent_POS, agent))
+			remain_time = oht.get_bind_remain_time(agent_POS, agent)
 
 			if bind_is_scheduled:
 				end_time = bind_end_time
@@ -369,63 +480,63 @@ class GASolver():
 				job_time = 0
 				if self.oht_list[oht_id].prev:
 					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				end_time = max(agent_time[ag_id], job_time) + process_time
+				end_time = max(agent_time[agent], job_time) + process_time
 				
 				## Find the end time of bind OHT
-				bind_ag_id = alloc_pop[self.oht_list[oht_id].bind.id]
-				bind_process_time = int(oht.bind.get_oht_time(cur_pos[bind_ag_id], bind_ag_id))
-				bind_remain_time = oht.bind.get_bind_remain_time(cur_pos[bind_ag_id], bind_ag_id)
+				bind_agent = alloc_pop[self.oht_list[oht_id].bind.id]
+				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent))
+				bind_remain_time = oht.bind.get_bind_remain_time(agent_POS, bind_agent)
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
-				bind_end_time = max(agent_time[bind_ag_id], bind_job_time) + bind_process_time
+				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
 
 				bind_is_scheduled = True
 
 				## Add punishment when using same agent at same time
 				same_agent_PUN = 0
-				if ag_id == bind_ag_id:
+				if agent == bind_agent:
 					same_agent_PUN = self.PUN_val
 
 				bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time + same_agent_PUN
 				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time + same_agent_PUN
 
 				start_time = end_time - process_time
-				tmp = oht.get_timestamp(cur_pos[ag_id], ag_id)
+				tmp = oht.get_timestamp(agent_POS, agent)
 				for t, pos in tmp:
-					timestamps[ag_id].append((start_time + t, pos))
-				oht.renew_agent_pos(cur_pos, ag_id)
+					timestamps[agent].append((start_time + t, pos))
+				oht.renew_agent_pos(agent_POS, agent)
 
 				bind_start_time = bind_end_time - bind_process_time
-				tmp = oht.get_timestamp(cur_pos[ag_id], bind_ag_id)
+				tmp = oht.get_timestamp(agent_POS, bind_agent)
 				for t, pos in tmp:
-					timestamps[bind_ag_id].append((bind_start_time + t, pos))
-				oht.bind.renew_agent_pos(cur_pos, bind_ag_id)
+					timestamps[bind_agent].append((bind_start_time + t, pos))
+				oht.bind.renew_agent_pos(agent_POS, bind_agent)
 
 			## Normal OHT with previous OHT
 			elif self.oht_list[oht_id].prev:
        
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				start_time = max(agent_time[ag_id], job_time)
+				start_time = max(agent_time[agent], job_time)
 				end_time = start_time + process_time
 
-				tmp = oht.get_timestamp(cur_pos[ag_id], ag_id)
+				tmp = oht.get_timestamp(agent_POS, agent)
 				for t, pos in tmp:
-					timestamps[ag_id].append((start_time + t, pos))
-				oht.renew_agent_pos(cur_pos, ag_id)
+					timestamps[agent].append((start_time + t, pos))
+				oht.renew_agent_pos(agent_POS, agent)
 
 			## Normal OHT without previous OHT
 			else:
-				start_time = agent_time[ag_id]
+				start_time = agent_time[agent]
 				end_time = start_time + process_time
 	
-				tmp = oht.get_timestamp(cur_pos[ag_id], ag_id)
+				tmp = oht.get_timestamp(agent_POS, agent)
 				for t, pos in tmp:
-					timestamps[ag_id].append((start_time + t, pos))
-				oht.renew_agent_pos(cur_pos, ag_id)
+					timestamps[agent].append((start_time + t, pos))
+				oht.renew_agent_pos(agent_POS, agent)
 
-			agent_oht_id[ag_id].append(oht_id)
-			agent_time[ag_id] = end_time
+			agent_oht_id[agent].append(oht_id)
+			agent_time[agent] = end_time
 			oht_end_time[oht_id] = end_time
 
 		
@@ -532,7 +643,7 @@ class GASolver():
 	def show_result(self):
      
 		agent_time = [0 for _ in range(self.num_agent)]
-		ag_pos = ["LH", "RH", "BOT"]
+		agent_POS = ["LH", "RH", "BOT"]
   
 		gantt_dict = []
 		path_dict = [[] for _ in range(3)] 
@@ -554,11 +665,11 @@ class GASolver():
 		for oht_id in self.seq_best[:-1]: ## not showing END node
       
 			## Use already calculated data when scheduling second binded OHT
-			ag_id = self.alloc_best[oht_id]
+			agent = self.alloc_best[oht_id]
 			oht:OHT = self.oht_list[oht_id]
-			process_time = int(oht.get_oht_time(ag_pos[ag_id], ag_id))
-			remain_time = int(oht.get_bind_remain_time(ag_pos[ag_id], ag_id))
-			oht.renew_agent_pos(ag_pos, ag_id)
+			process_time = int(oht.get_oht_time(agent_POS, agent))
+			remain_time = int(oht.get_bind_remain_time(agent_POS, agent))
+			oht.renew_agent_pos(agent_POS, agent)
 
 			## Same as cal_makespan
 			if bind_is_scheduled:
@@ -571,17 +682,17 @@ class GASolver():
 				job_time = 0
 				if self.oht_list[oht_id].prev:
 					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				end_time = max(agent_time[ag_id], job_time) + process_time
+				end_time = max(agent_time[agent], job_time) + process_time
     
 				## Find the end time of bind OHT
-				bind_ag_id = self.alloc_best[self.oht_list[oht_id].bind.id]
-				bind_process_time = int(oht.bind.get_oht_time(ag_pos[bind_ag_id], bind_ag_id))
-				bind_remain_time = oht.bind.get_bind_remain_time(ag_pos[bind_ag_id], bind_ag_id)
+				bind_agent = self.alloc_best[self.oht_list[oht_id].bind.id]
+				bind_process_time = int(oht.bind.get_oht_time(agent_POS, bind_agent))
+				bind_remain_time = oht.bind.get_bind_remain_time(agent_POS, bind_agent)
 				bind_job_time = 0
 				if self.oht_list[oht_id].bind.prev:
 					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
 				bind_is_scheduled = True
-				bind_end_time = max(agent_time[bind_ag_id], bind_job_time) + bind_process_time
+				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
 
 				bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
 				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
@@ -590,27 +701,27 @@ class GASolver():
 			elif self.oht_list[oht_id].prev:
 				## oht start time should be bigger than every previous oht
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				end_time = max(agent_time[ag_id], job_time) + process_time
+				end_time = max(agent_time[agent], job_time) + process_time
     
 			## Normal OHT without previous OHT
 			else:
-				end_time = agent_time[ag_id] + process_time
+				end_time = agent_time[agent] + process_time
     
-			agent_time[ag_id] = end_time
+			agent_time[agent] = end_time
 			oht_end_time[oht_id] = end_time
    
 			start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
 			end_time_delta = str(timedelta(seconds = end_time))
 			gantt_dict.append(dict(
-				Agent = f'{AGENT[ag_id]}', 
-				Start = f'2024-06-07 {(str(start_time_delta))}', 
-				Finish = f'2024-06-07 {(str(end_time_delta))}',
+				Agent = f'{AGENT[agent]}', 
+				Start = f'2024-06-05 {(str(start_time_delta))}', 
+				Finish = f'2024-06-05 {(str(end_time_delta))}',
 				Resource =f'OHT{oht_id}({self.oht_list[oht_id].type})')
             	)
 			
 			prefix_time = float(end_time - process_time)
 			for tb in self.oht_list[oht_id].flat():
-				path_dict[ag_id].append(dict(
+				path_dict[agent].append(dict(
 					TaskId = oht.id,
 					Name = tb.name,
 					Start = prefix_time,

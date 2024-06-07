@@ -1,3 +1,4 @@
+# from GAScheduling_job0607 import GAJobSolver
 from GAScheduling_oht_rk import *
 from therbligHandler import *
 import optuna
@@ -15,12 +16,11 @@ def test():
 	solver = GASolver(procedure_id, tbh.oht_list)
 	solver.test()
 
-# Simple run
-def simple_run():
+def oht_simple_run():
 	solver = GASolver(procedure_id, tbh.oht_list)
 	solver.run()
 
-def optuna_run():
+def oht_optuna_run():
 	def GA_objective(trial, id, oht_list):
 		param_grid = {
 			'pop_size': trial.suggest_int("pop_size", 200, 700, step=50),
@@ -41,8 +41,14 @@ def optuna_run():
 	print('Parameters: ', study.best_trial.params)
 	print('Values: ', study.best_trial.value)
 	print('para', study.best_trial.user_attrs)
+ 
+# def job_simple_run():
+# 	print(tbh.job_list)
+# 	solver = GAJobSolver(procedure_id, tbh.job_list, tbh.oht_list)
 
 ## Run Method
 # test()
-simple_run()
+oht_simple_run()
 # optuna_run()
+
+# job_simple_run()
