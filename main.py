@@ -2,13 +2,18 @@ from GAScheduling_oht_rk import *
 from therbligHandler import *
 import optuna
 
-procedure_id = "final2"
+procedure_id = "final3"
 num_tbs = 7
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)
 tbh.run()
 # print(tbh.job_list)
 print(tbh.oht_list)
+
+# test
+def test():
+	solver = GASolver(procedure_id, tbh.oht_list)
+	solver.test()
 
 # Simple run
 def simple_run():
@@ -38,5 +43,6 @@ def optuna_run():
 	print('para', study.best_trial.user_attrs)
 
 ## Run Method
-# simple_run()
-optuna_run()
+# test()
+simple_run()
+# optuna_run()

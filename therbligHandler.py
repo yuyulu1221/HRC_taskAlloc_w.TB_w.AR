@@ -36,24 +36,22 @@ class Therblig(object):
     def __repr__(self):
         return f"#{str(self.name)}"    
     
-    def get_tb_time(self, ag_pos, ag_id):
+    def get_tb_time(self, ag_pos, ag_id) -> int:
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.name in ["R", "M"]:
             if self.From == "AGENT":
                 dist = np.linalg.norm(dh.POS[self.To] - dh.POS[ag_pos[ag_id]])
             else:
                 dist = np.linalg.norm(dh.POS[self.To] - dh.POS[self.From])
-                
-            if dist == 0:
-                dist += 2
-            elif dist <= 30:
+            
+            if dist <= 30:
                 dist = ceil(dist / 2) * 2
             elif dist <= 80:
                 dist = ceil(dist / 5) * 5
             else:
                 dist = 80
             self.time = dh.MTM.at[self.name + str(dist) + self.type, AGENT[ag_id]]
-            return self.time
+            return int(self.time)
         
         else:
             self.time = dh.MTM.at[self.name, AGENT[ag_id]]

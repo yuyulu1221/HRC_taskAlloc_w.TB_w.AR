@@ -59,6 +59,12 @@ class GASolver():
   
 		self.PUN_val = 100000
   
+	def test(self):
+		pop = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+		alloc_pop = [0, 2, 2, 2, 0, 1, 0, 1, 0, 1]
+		print(self.cal_makespan(pop, alloc_pop))
+		# self.show_result()
+  
 	def run(self):
 		self.init_pop()
 		for it in range(self.num_iter):
@@ -83,7 +89,7 @@ class GASolver():
 			rk_pop = [[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)]
 			self.rk_pop_list.append(rk_pop)
 			self.alloc_pop_list.append([self.decide_agent(rk) for rk in rk_pop])
-			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.rk_pop_list[i], self.alloc_pop_list[i]))
+			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i]))
 	
 	def decide_agent(self, key) -> int:
 		"""
@@ -119,7 +125,7 @@ class GASolver():
 		
 		## Renew pop_fit and calculate total fit for roulette wheel approach
 		for i in range(self.pop_size):
-			self.pop_fit_list[i] = self.cal_makespan(self.pop_list[i], self.rk_pop_list[i], self.alloc_pop_list[i])
+			self.pop_fit_list[i] = self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i])
 			total_fit += 1 / self.pop_fit_list[i]
 		
 		## Calculate cumulative propability
@@ -284,7 +290,7 @@ class GASolver():
 		"""
 		offspring_fit = []
 		for i in range(len(offspring)):
-			offspring_fit.append(self.cal_makespan(offspring[i], rk_offspring[i], alloc_offspring[i]))
+			offspring_fit.append(self.cal_makespan(offspring[i], alloc_offspring[i]))
    
 		self.pop_list = list(self.pop_list) + offspring
 		self.pop_fit_list = list(self.pop_fit_list) + offspring_fit
@@ -326,7 +332,7 @@ class GASolver():
 	# 			if oht.next.id
 				
 
-	def cal_makespan(self, pop:list, rk_pop:list, alloc_pop:list):
+	def cal_makespan(self, pop:list, alloc_pop:list):
 		"""
 		Returns:
 			int: makespan calculated by scheduling
@@ -398,6 +404,7 @@ class GASolver():
 
 			## Normal OHT with previous OHT
 			elif self.oht_list[oht_id].prev:
+       
 				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
 				start_time = max(agent_time[agent], job_time)
 				end_time = start_time + process_time
@@ -596,8 +603,8 @@ class GASolver():
 			end_time_delta = str(timedelta(seconds = end_time))
 			gantt_dict.append(dict(
 				Agent = f'{AGENT[agent]}', 
-				Start = f'2024-05-27 {(str(start_time_delta))}', 
-				Finish = f'2024-05-27 {(str(end_time_delta))}',
+				Start = f'2024-06-05 {(str(start_time_delta))}', 
+				Finish = f'2024-06-05 {(str(end_time_delta))}',
 				Resource =f'OHT{oht_id}({self.oht_list[oht_id].type})')
             	)
 			
