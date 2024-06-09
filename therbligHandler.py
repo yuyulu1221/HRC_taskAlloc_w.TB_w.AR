@@ -100,6 +100,7 @@ class OHT:
         self.prev:list = []
         self.bind:OHT = None
         self.bind_time = 0
+        self.end_time = 0
         self.To: str
         self.type = "P&P"
         for tb in self.tb_list:
@@ -201,6 +202,7 @@ class TBHandler(object):
                 tmp.append(tb)
                 if tb.name == "RL":
                     # self.list.append(tmp.copy())
+                    tmp.append(Therblig("R", tb.To, tb.To + "_TOP", "B"))
                     oht = OHT(tmp.copy())
                     self.oht_list.append(oht)
                     job.append(oht)

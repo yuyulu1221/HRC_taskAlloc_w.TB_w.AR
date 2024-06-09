@@ -1,6 +1,6 @@
 #%% importing required modules
 from math import inf
-import random
+from enum import Enum
 import pandas as pd
 import numpy as np
 import copy
@@ -25,6 +25,11 @@ def read_OHT_relation(oht_list, id):
 				oht_list[row_id].bind = oht_list[col_id]
     
 	return oht_list
+
+class Agent(Enum):
+	LH = 0
+	RH = 1
+	BOT = 2
 
 #%% GASolver
 class GASolver():
@@ -337,8 +342,7 @@ class GASolver():
 		Returns:
 			int: makespan calculated by scheduling
 		"""
-		agent_time = [0 for _ in range(self.num_agent)]
-		agent_oht_id = [[] for _ in range(self.num_agent)]
+		ag_time = [0 for _ in range(self.num_agent)]
   
 		## Current position for each agent
 		cur_pos = ["LH", "RH", "BOT"]
@@ -363,22 +367,22 @@ class GASolver():
 				bind_is_scheduled = False
 
 			## For scheduling first binded OHT 
-			elif self.oht_list[oht_id].bind != None:
+			elif oht.bind != None:
 
 				## Find the end time of current OHT
 				job_time = 0
-				if self.oht_list[oht_id].prev:
-					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				end_time = max(agent_time[ag_id], job_time) + process_time
+				if oht.prev:
+					job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+				end_time = max(ag_time[ag_id], job_time) + process_time
 				
 				## Find the end time of bind OHT
-				bind_ag_id = alloc_pop[self.oht_list[oht_id].bind.id]
+				bind_ag_id = alloc_pop[oht.bind.id]
 				bind_process_time = int(oht.bind.get_oht_time(cur_pos[bind_ag_id], bind_ag_id))
 				bind_remain_time = oht.bind.get_bind_remain_time(cur_pos[bind_ag_id], bind_ag_id)
 				bind_job_time = 0
-				if self.oht_list[oht_id].bind.prev:
-					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
-				bind_end_time = max(agent_time[bind_ag_id], bind_job_time) + bind_process_time
+				if oht.bind.prev:
+					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
+				bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
 
 				bind_is_scheduled = True
 
@@ -403,10 +407,10 @@ class GASolver():
 				oht.bind.renew_agent_pos(cur_pos, bind_ag_id)
 
 			## Normal OHT with previous OHT
-			elif self.oht_list[oht_id].prev:
+			elif oht.prev:
        
-				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				start_time = max(agent_time[ag_id], job_time)
+				job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+				start_time = max(ag_time[ag_id], job_time)
 				end_time = start_time + process_time
 
 				tmp = oht.get_timestamp(cur_pos[ag_id], ag_id)
@@ -416,7 +420,7 @@ class GASolver():
 
 			## Normal OHT without previous OHT
 			else:
-				start_time = agent_time[ag_id]
+				start_time = ag_time[ag_id]
 				end_time = start_time + process_time
 	
 				tmp = oht.get_timestamp(cur_pos[ag_id], ag_id)
@@ -424,13 +428,12 @@ class GASolver():
 					timestamps[ag_id].append((start_time + t, pos))
 				oht.renew_agent_pos(cur_pos, ag_id)
 
-			agent_oht_id[ag_id].append(oht_id)
-			agent_time[ag_id] = end_time
+			ag_time[ag_id] = end_time
 			oht_end_time[oht_id] = end_time
 
 		
 		
-		makespan = max(agent_time) + self.interference_PUN(timestamps)
+		makespan = max(ag_time) + self.interference_PUN(timestamps)
 		## Verify interference punishment
 		# if makespan < self.PUN_val:
 		# 	print(pop)

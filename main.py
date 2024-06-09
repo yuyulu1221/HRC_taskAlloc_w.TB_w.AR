@@ -1,4 +1,4 @@
-# from GAScheduling_job0607 import GAJobSolver
+from GAScheduling_job0607 import GAJobSolver
 from GAScheduling_oht_rk import *
 from therbligHandler import *
 import optuna
@@ -42,9 +42,9 @@ def oht_optuna_run():
 	print('Values: ', study.best_trial.value)
 	print('para', study.best_trial.user_attrs)
  
-# def job_simple_run():
-# 	print(tbh.job_list)
-# 	solver = GAJobSolver(procedure_id, tbh.job_list, tbh.oht_list)
+def job_simple_run():
+	solver = GAJobSolver(procedure_id, tbh.job_list, tbh.oht_list)
+	solver.test()
 
 ## Run Method
 # test()

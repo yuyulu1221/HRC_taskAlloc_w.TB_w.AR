@@ -1,3 +1,4 @@
+from enum import Enum
 import numpy as np
 
 class Node:
@@ -35,3 +36,12 @@ print(d)
 e = [('a', 1), ('a', 2)]
 f = dict(e)
 print(f)
+
+class TTT(Enum):
+	AAA = 1
+	BBB = 2
+	CCC = 3
+ 
+for i in TTT:
+	print(i)
+	print(i.value)

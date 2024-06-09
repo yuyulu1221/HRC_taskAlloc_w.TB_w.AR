@@ -1,6 +1,6 @@
 #%% importing required modules
 from math import inf
-import random
+from enum import Enum
 import pandas as pd
 import numpy as np
 import copy
@@ -26,6 +26,11 @@ def read_OHT_relation(oht_list, id):
     
 	return oht_list
 
+class TaskType(Enum):
+	MANUAL = 0
+	HRC = 1
+	ROBOT = 2
+
 #%% GASolver
 class GAJobSolver():
 	def __init__(self, id, job_list, oht_list, pop_size=320, num_iter=200, crossover_rate=0.8, mutation_rate=0.01):
@@ -34,8 +39,10 @@ class GAJobSolver():
   
 		# Get OHT relation
 		self.job_list = job_list
-		self.oht_list = read_OHT_relation(oht_list, id)
 		self.num_job = len(job_list)  
+		self.oht_list = read_OHT_relation(oht_list, id)
+		self.num_oht = len(oht_list)  
+		
 
 		self.num_agent = 3 # H, R, HRC
 
@@ -52,130 +59,96 @@ class GAJobSolver():
 		self.pop_fit_list = []
 		self.alloc_pop_list = []
   
+		self.job_time = [[-1, -1, -1] for _ in range(self.num_job)]
+  
 		self.PUN_val = 100000
+	
+	def test(self):
+		self.cal_job_time()
 
 	def cal_job_time(self):
-		self.job_time = [-1, -1, -1] * self.num_job
   
-		for ag_id in range(self.num_agent):
-			for job in self.job_list:
-				if ag_id == 0:
-					job_time = max(oht_end_time[])
-					for oht in job:
-							
-       
-						process_time_LH = int(oht.get_oht_time("LH", 0))
-						process_time_RH = int(oht.get_oht_time("RH", 1))
-						if oht.bind != None:
-							pass
-						elif oht.prev != None:
-							job_time = max()	
-						else:
-							
-				elif ag_id == 1:
-					if job.type in ("A", "DA"):
-						continue
-  
-	def cal_makespan(self, pop:list, alloc_pop:list):
-		"""
-		Returns:
-			int: makespan calculated by scheduling
-		"""
-		agent_time = [0 for _ in range(self.num_agent)]
-		agent_oht_id = [[] for _ in range(self.num_agent)]
-  
-		## Current position for each agent
-		cur_pos = ["LH", "RH", "BOT"]
-
-		## Record end time of each OHT
-		oht_end_time = [0 for _ in range(self.num_oht)]
-
-		## Special cases: binded OHT is scheduled
-		bind_is_scheduled = False
-		bind_end_time = 0
-  
-		timestamps = [[], [], []]
-
-		for oht_id in pop:
-			ag_id = alloc_pop[oht_id]
-			oht:OHT = self.oht_list[oht_id]
-			process_time = int(oht.get_oht_time(cur_pos[ag_id], ag_id))
-			remain_time = oht.get_bind_remain_time(cur_pos, ag_id)
-
-			if bind_is_scheduled:
-				end_time = bind_end_time
-				bind_is_scheduled = False
-
-			## For scheduling first binded OHT 
-			elif self.oht_list[oht_id].bind != None:
-
-				## Find the end time of current OHT
-				job_time = 0
-				if self.oht_list[oht_id].prev:
-					job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				end_time = max(agent_time[ag_id], job_time) + process_time
-				
-				## Find the end time of bind OHT
-				bind_agent = alloc_pop[self.oht_list[oht_id].bind.id]
-				bind_process_time = int(oht.bind.get_oht_time(cur_pos, bind_agent))
-				bind_remain_time = oht.bind.get_bind_remain_time(cur_pos, bind_agent)
-				bind_job_time = 0
-				if self.oht_list[oht_id].bind.prev:
-					bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in self.oht_list[oht_id].bind.prev)
-				bind_end_time = max(agent_time[bind_agent], bind_job_time) + bind_process_time
-
-				bind_is_scheduled = True
-
-				## Add punishment when using same agent at same time
-				same_agent_PUN = 0
-				if ag_id == bind_agent:
-					same_agent_PUN = self.PUN_val
-
-				bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time + same_agent_PUN
-				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time + same_agent_PUN
-
-				start_time = end_time - process_time
-				tmp = oht.get_timestamp(cur_pos, ag_id)
-				for t, pos in tmp:
-					timestamps[ag_id].append((start_time + t, pos))
-				oht.renew_agent_pos(cur_pos, ag_id)
-
-				bind_start_time = bind_end_time - bind_process_time
-				tmp = oht.get_timestamp(cur_pos, bind_agent)
-				for t, pos in tmp:
-					timestamps[bind_agent].append((bind_start_time + t, pos))
-				oht.bind.renew_agent_pos(cur_pos, bind_agent)
-
-			## Normal OHT with previous OHT
-			elif self.oht_list[oht_id].prev:
-       
-				job_time = max(oht_end_time[oht_prev.id] for oht_prev in self.oht_list[oht_id].prev)
-				start_time = max(agent_time[ag_id], job_time)
-				end_time = start_time + process_time
-
-				tmp = oht.get_timestamp(cur_pos, ag_id)
-				for t, pos in tmp:
-					timestamps[ag_id].append((start_time + t, pos))
-				oht.renew_agent_pos(cur_pos, ag_id)
-
-			## Normal OHT without previous OHT
-			else:
-				start_time = agent_time[ag_id]
-				end_time = start_time + process_time
-	
-				tmp = oht.get_timestamp(cur_pos, ag_id)
-				for t, pos in tmp:
-					timestamps[ag_id].append((start_time + t, pos))
-				oht.renew_agent_pos(cur_pos, ag_id)
-
-			agent_oht_id[ag_id].append(oht_id)
-			agent_time[ag_id] = end_time
-			oht_end_time[oht_id] = end_time
-	
-		makespan = max(agent_time) + self.interference_PUN(timestamps)
-
-		return makespan	
+		# Task Type: Manual
 		
+		for job_id, job in enumerate(self.job_list):
+			ag_time = [0] * self.num_agent
+			oht_seq = [oht.id for oht in job.oht_list]
+			oht_seq = self.relation_repairment(oht_seq)
+			oht_end_time = [0] * self.num_oht
+			bind_is_scheduled = False
+			bind_end_time = 0
+			for task_type in TaskType:
+				if task_type == TaskType.MANUAL: 
+						ag_id = 1
+						bind_ag_id = 0
+					
+				elif task_type == TaskType.HRC:
+					ag_id = 1
+					bind_ag_id = 2
+	
+				else:
+					ag_id = 2
+					bind_ag_id = 2
+				for oht_id in oht_seq:
+					## Task type MANUAL
+					ag_pos = AGENT[ag_id]
+					bind_ag_pos = AGENT[bind_ag_id]
+					
+					oht:OHT = self.oht_list[oht_id]
+					process_time = int(oht.get_oht_time(ag_pos, ag_id))
+					remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
+
+					if bind_is_scheduled:
+						end_time = bind_end_time
+						bind_is_scheduled = False
+		
+					elif oht.bind != None:
+						if task_type == TaskType.ROBOT:
+							bind_end_time = self.PUN_val
+							end_time = self.PUN_val
+
+						else:
+							## Find the end time of current OHT
+							job_time = 0
+							if oht.prev:
+								job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+							end_time = max(ag_time[ag_id], job_time) + process_time
+							
+							## Find the end time of bind OHT
+							bind_ag_pos = AGENT[bind_ag_id]
+							bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
+							bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
+							bind_job_time = 0
+							if oht.bind.prev:
+								bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
+							bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
+
+							bind_is_scheduled = True
+
+							bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
+							end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
+					
+					## Normal OHT with previous OHT
+					elif oht.prev:
+			
+						job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+						start_time = max(ag_time[ag_id], job_time)
+						end_time = start_time + process_time
+			
+					else:
+						start_time = ag_time[ag_id]
+						end_time = start_time + process_time
+
+				ag_time[ag_id] = end_time
+				oht_end_time[oht_id] = end_time
+
+				print(f"job_time[{job_id}][{task_type.value}] = {max(ag_time)}")
+				self.job_time[job_id][task_type.value] = max(ag_time)
+
+		# print(self.job_time)
+		input()
+	
+ 
 	def run(self):
 		self.init_pop()
 		for it in range(self.num_iter):
