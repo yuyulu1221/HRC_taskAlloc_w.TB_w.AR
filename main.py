@@ -44,11 +44,11 @@ def oht_optuna_run():
  
 def job_simple_run():
 	solver = GAJobSolver(procedure_id, tbh.job_list, tbh.oht_list)
-	solver.test()
+	solver.run()
 
 ## Run Method
 # test()
-oht_simple_run()
+# oht_simple_run()
 # optuna_run()
 
-# job_simple_run()
+job_simple_run()
