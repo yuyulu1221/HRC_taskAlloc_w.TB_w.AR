@@ -208,7 +208,7 @@ class TBHandler(object):
                     job.append(oht)
                     tmp.clear()
             self.job_list.append(JOB(job))
-
+            
         # Use dummy node to represent "END"
         self.oht_list.append(OHT([]))
                         

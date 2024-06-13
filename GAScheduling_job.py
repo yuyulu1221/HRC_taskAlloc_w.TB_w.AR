@@ -1,329 +1,621 @@
 #%% importing required modules
+from math import inf
+from enum import Enum
+from multiprocessing import process
 import pandas as pd
 import numpy as np
-import time
 import copy
 import plotly.express as px
-import datetime
 from datetime import timedelta
-import therbligHandler as tbh
+
 from therbligHandler import *
-# from InfoHandler import *
+import dataHandler as dh
 
-#%% read position
-def read_POS():
-	pos_df = pd.read_excel("data.xlsx", sheet_name="Position")
-	Pos = {}
-	for idx, pos in pos_df.iterrows():
-		Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
-	return Pos
+#%% read OHT relation
+def read_OHT_relation(oht_list, id):
+	ohtr_df = pd.read_csv(f"./data/oht_relation_{id}.csv", index_col=0)
+ 
+	for row_id in range(ohtr_df.shape[0]):
+		for col_id in range(ohtr_df.shape[1]):
+			if ohtr_df.iloc[row_id, col_id] == -1:
+				oht_list[row_id].prev.append(oht_list[col_id])
+			elif ohtr_df.iloc[row_id, col_id] == 1:
+				oht_list[row_id].next.append(oht_list[col_id])
+			elif ohtr_df.iloc[row_id, col_id] == 2:
+				oht_list[row_id].bind = oht_list[col_id]
+    
+	return oht_list
 
-#%% read MTM
-def read_MTM():
-	mtm_df = pd.read_excel("data.xlsx", sheet_name="Therblig Process Time", index_col=0)
-	return mtm_df
-
-_ = read_MTM()
-
-# To list all possible cases about n tasks allocation
-def carry_10_to_3(num, length) -> list:
-	res = []
-	while(num > 0 and len(res) < length):
-		res.append(num % 3)
-		num //= 3
-	n = len(res)
-	for _ in range(length - n):
-		res.append(0)
-	return num, res
+class TaskType(Enum):
+	MANUAL = 0
+	HRC = 1
+	ROBOT = 2
 	
 
 #%% GASolver
-class GASolver():
-	def __init__(self, oht_list_per_job):
-     
-		# pt_tmp = pd.read_excel("data_test.xlsx",sheet_name="Processing Time",index_col =[0])
-		# ms_tmp = pd.read_excel("data_test.xlsx",sheet_name="Agents Sequence",index_col =[0])
-
-		# Get position dict -> str: np.array_1x3
-		self.POS = read_POS()
-		# Get MTM dataframe
-		self.MTM = read_MTM()
+class GAJobSolver():
+	def __init__(self, id, job_list, oht_list, pop_size=260, num_iter=200, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
+		
+		self.procedure_id = id
   
-		self.oht_list_per_job = oht_list_per_job
-		self.num_oht_per_job = [len(oht_list) for oht_list in self.oht_list_per_job]
-		# self.agent_seq_per_job = [[np.random.randint(0, 3) for _ in range(num_task)] for num_task in self.num_task_per_job]
-		self.alloc_per_job = [[0 for _ in range(num_oht)] for num_oht in self.num_oht_per_job]
-		# print(self.agent_seq_per_job)
+		# Get OHT relation
+		self.job_list = job_list
+		self.num_job = len(job_list)
+		self.oht_list = read_OHT_relation(oht_list, id)
+		self.num_oht = len(oht_list)  
 
+		self.num_agent = 3 # H, R, HRC
 
-		self.num_agent = 3
-		self.num_job = len(self.num_oht_per_job) # number of jobs
-		print("num_job: ", self.num_job)
-		self.num_gene = sum(self.num_oht_per_job) # number of genes in a chromosome
-		# print(self.agent_seq)
-
-		# self.process_t=[list(map(float, pt_tmp.iloc[i])) for i in range(self.num_job)]
-
-		# Raw input
-		self.pop_size=int(input('Please input the size of population: ') or 32) # default: 32
-		self.parent_selection_rate=float(input('Please input the size of Parent Selection Rate: ') or 0.5) # default: 0.8
-		self.crossover_rate=float(input('Please input the size of Crossover Rate: ') or 0.8) # default: 0.8
-		self.mutation_rate=float(input('Please input the size of Mutation Rate: ') or 0.2) # default: 0.2
-		mutation_selection_rate=float(input('Please input the mutation selection rate: ') or 0.2)
-		self.num_mutation_pos=round(self.num_gene*mutation_selection_rate)
-		self.num_iter=int(input('Please input number of iteration: ') or 50) # default: 2000
-			
+		# Hyper-paremeters
+		self.pop_size=int(pop_size) 
+		self.num_iter=int(num_iter) 
+		self.parent_selection_rate = 0.6
+		self.crossover_rate = crossover_rate
+		self.mutation_rate = mutation_rate
+		mutation_selection_rate = 0.2
+		self.num_mutation_pos = round(self.num_job * mutation_selection_rate)
+		self.rk_mutation_rate = rk_mutation_rate
+		self.rk_iter_change_rate = rk_iter_change_rate
+		
 		self.pop_list = []
-		self.pop_fit = []
-   
-		self.makespan_rec = []
-		self.start_time = time.time()
-    
+		self.pop_fit_list = []
+		self.rk_pop_list = []
+		self.alloc_pop_list = []
+		self.alloc_pop_list = []
+  
+		self.job_time = [[-1, -1, -1] for _ in range(self.num_job)]
+		self.job_oht_alloc = [[(-1, -1), (-1, -1), (-1, -1)] for _ in range(self.num_job)]
+		print(self.job_oht_alloc)
+  
+		self.PUN_val = 1000000
+	
+	def test(self):
+		self.cal_job_time()
+ 
 	def run(self):
+		self.cal_job_time()
 		self.init_pop()
-		for i in range(3**self.num_gene):
-			self.gen_alloc_per_job(i)
-			print(f"#{i}_alloc_per_job: ", self.alloc_per_job)
-			for it in range(self.num_iter):
-				self.Tbest_now = 999999999
-				parent = self.selection()
-				offspring = self.twoPtCrossover(parent) # with mutation
-				offspring, fit = self.repairment(offspring)
-				self.replacement(offspring, fit)
-				self.progress_bar(it)
-			print("\n")
-		self.gantt_chart()
+		for it in range(self.num_iter):
+			self.Tbest_local = 999999999
+			parent, rk_parent = self.selection()
+			offspring, rk_offspring, alloc_offspring = self.reproduction(parent, rk_parent)
+			self.replacement(offspring, rk_offspring, alloc_offspring)
+			self.progress_bar(it)
+		print("\n")
+		self.show_result()
+		return self.Tbest
+	
+	def cal_job_time(self):
+
+		for job_id, job in enumerate(self.job_list):
+			ag_time = [0] * self.num_agent
+			oht_seq = [oht.id for oht in job.oht_list]
+			oht_seq = self.relation_repairment(oht_seq)
+			oht_end_time = [0] * self.num_oht
+			bind_is_scheduled = False
+			bind_end_time = 0
    
+			for task_type in TaskType:
+				if task_type == TaskType.MANUAL: 
+					ag_id_pair = [(0, 1), (1, 0)]
+					
+				elif task_type == TaskType.HRC:
+					ag_id_pair = [(0, 2), (1, 2), (2, 0), (2, 1)]
+	
+				else:
+					ag_id_pair = [(2, 2)]
+
+				min_job_time = 9999999
+				min_job_oht_alloc = (-1, -1)
+				for ag_id, bind_ag_id in ag_id_pair:
+					for oht_id in oht_seq:	
+						ag_pos = AGENT[ag_id]
+						bind_ag_pos = AGENT[bind_ag_id]
+						
+						oht:OHT = self.oht_list[oht_id]
+						process_time = int(oht.get_oht_time(ag_pos, ag_id))
+						remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
+
+						if bind_is_scheduled:
+							end_time = bind_end_time
+							bind_is_scheduled = False
+			
+						elif oht.bind != None:
+							if task_type == TaskType.ROBOT:
+								bind_end_time = self.PUN_val
+								end_time = self.PUN_val
+
+							else:
+								## Find the end time of current OHT
+								job_time = 0
+								if oht.prev:
+									job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+								end_time = max(ag_time[ag_id], job_time) + process_time
+								
+								## Find the end time of bind OHT
+								bind_ag_pos = AGENT[bind_ag_id]
+								bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
+								bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
+								bind_job_time = 0
+								if oht.bind.prev:
+									bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
+								bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
+
+								bind_is_scheduled = True
+
+								bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
+								end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
+						
+						## Normal OHT with previous OHT
+						elif oht.prev:
+							job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+							start_time = max(ag_time[ag_id], job_time)
+							end_time = start_time + process_time
+				
+						else:
+							start_time = ag_time[ag_id]
+							end_time = start_time + process_time
+
+						ag_time[ag_id] = end_time
+						oht_end_time[oht_id] = end_time
+      
+						if end_time < min_job_time:
+							min_job_time = end_time
+							min_job_oht_alloc = (ag_id, bind_ag_id)
+
+				print(f"job_time[{job_id}][{task_type.name}] = {min_job_time}, {min_job_oht_alloc}")
+				self.job_time[job_id][task_type.value] = min_job_time
+				self.job_oht_alloc[job_id][task_type.value] = min_job_oht_alloc
+
+		# print(self.job_time)
+ 
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
-		tmp = []
-		for i, seq in enumerate(self.alloc_per_job):
-			tmp += [i] * len(seq)
+		tmp =  [i for i in range(self.num_job)]
+	
+		## Init pop_list, rk_pop_list, and pop_fit
 		for i in range(self.pop_size):	
-			nxm_random_num = list(np.random.permutation(tmp)) # generate a random permutation of 0 to num_job*num_mc-1
-			self.pop_list.append(nxm_random_num) # add to the population_list
-			self.pop_fit.append(self.cal_makespan(self.pop_list[i]))
-		# print(self.pop_list)
-   
-	def gen_alloc_per_job(self, remain):
-		self.alloc_per_job = []
-		for num_oht in self.num_oht_per_job:
-			remain, tmp = carry_10_to_3(remain, num_oht)
-			self.alloc_per_job.append(tmp)
-
-	def cal_makespan(self, pop): # fitness
-		# print("pop: ", pop)
-		agent_time = [0 for _ in range(self.num_agent)]
-		job_time = [0 for _ in range(self.num_job)]
-		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
-		agent_POS = {
-			"LH": self.POS["LH"],
-			"RH": self.POS["RH"],
-			"BOT": self.POS["BOT"],
-		}
-		for job_id in pop: 
-			job_id = int(job_id)
-   
-			# get the allocated agent
-			agent = int(self.alloc_per_job[job_id][oht_cnt_per_job[job_id]])
-   
-			# get the task to do
-			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
-   
-			# get process time from composed therbligs
-			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			
-   			# TODO: Different condition with task sequence
-			end_time = max(agent_time[agent], job_time[job_id]) + process_time
-			agent_time[agent] = end_time
-			job_time[job_id] = end_time
-			oht_cnt_per_job[job_id] += 1
-   
-		makespan = max(agent_time)
-		return makespan
-   
-	def selection(self):
+			pop = list(np.random.permutation(tmp))
+			self.pop_list.append(pop)
+			rk_pop = [[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_job)]
+			self.rk_pop_list.append(rk_pop)
+			self.alloc_pop_list.append([self.decide_task_type(rk) for rk in rk_pop])
+			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i]))
+	
+	def decide_task_type(self, key) -> int:
 		"""
-		roulette wheel approach
+  		Decide agent by random key
+		
+		Args:
+			key (list): Random key for each oht
+		Returns:
+			int: Agent id
+		"""
+		if key[0] == key[1] and key[0] == key[2]:
+			# return np.random.randint(0, 3)
+			return np.random.choice(TaskType.MANUAL, TaskType.HRC, TaskType.ROBOT)
+		elif key[0] == key[1] and key[0] > key[2]:
+			return np.random.choice(TaskType.MANUAL, TaskType.HRC)
+			# return np.random.randint(0, 2)
+		elif key[1] == key[2] and key[1] > key[0]:
+			return np.random.choice(TaskType.HRC, TaskType.ROBOT)
+			# return np.random.randint(1, 3)
+		elif key[0] == key[2] and key[2] > key[1]:
+			return np.random.choice(TaskType.MANUAL, TaskType.ROBOT)
+			# return np.random.choice([0, 2])
+		else:
+			tmp_max = np.argmax(key)
+			if tmp_max == 0:
+				return TaskType.MANUAL
+			elif tmp_max == 1:
+				return TaskType.HRC
+			else:
+				return TaskType.ROBOT
+
+	def selection(self) -> tuple[list, list]:
+		"""
+		Roulette wheel approach
+
+		Returns:
+			tuple: parent and random_key_parent
 		"""
 		parent = []
+		rk_parent = []
 		cumulate_prop = []
 		total_fit = 0
-		# print(self.pop_list)
+		
+		## Renew pop_fit and calculate total fit for roulette wheel approach
 		for i in range(self.pop_size):
-			self.pop_fit[i] = self.cal_makespan(self.pop_list[i])
-			total_fit += self.pop_fit[i]
-		# print(self.pop_fit)
-		cumulate_prop.append(self.pop_fit[0])
+			self.pop_fit_list[i] = self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i])
+			total_fit += 1 / self.pop_fit_list[i]
+		
+		## Calculate cumulative propability
+		cumulate_prop.append(self.pop_fit_list[0] / total_fit)
 		for i in range(1, self.pop_size):
-			cumulate_prop.append(cumulate_prop[-1] + self.pop_fit[i]/total_fit)
-		# print(cumulate_prop)
-			
+			cumulate_prop.append(cumulate_prop[i-1] + self.pop_fit_list[i] / total_fit)
+		
+		## Generate parent and rk_parent list
 		for i in range(0, round(self.pop_size * self.parent_selection_rate)): 
 			for j in range(len(cumulate_prop)):
 				select_rand = np.random.rand()
 				if select_rand <= cumulate_prop[j]:
-					parent.append(copy.deepcopy(self.pop_list[j]))
-		# print(parent)
-		return parent
+					parent.append(copy.copy(self.pop_list[j]))
+					rk_parent.append(copy.copy(self.rk_pop_list[j]))
+
+		return parent, rk_parent
    
-	def twoPtCrossover(self, parent):
+	def reproduction(self, parents:list, rk_parents:list) -> list:
 		offspring = []
-		for _ in range(round(self.pop_size * self.crossover_rate / 2)):
-			p = np.random.choice(len(parent), 2, replace=False)
-			parent_1, parent_2 = parent[p[0]], parent[p[1]]
-			child = [copy.deepcopy(parent_1), copy.deepcopy(parent_2)]
-			cutpoint=list(np.random.choice(self.num_gene, 2, replace=False))
-			cutpoint.sort()
-		
-			child[0][cutpoint[0]:cutpoint[1]] = parent_2[cutpoint[0]:cutpoint[1]]
-			child[1][cutpoint[0]:cutpoint[1]] = parent_1[cutpoint[0]:cutpoint[1]]
-
-			# Mutation
-			for c in child:
-				if self.mutation_rate >= np.random.rand():
-					mutation_pos=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
-					tmp = c[mutation_pos[0]] # save the value which is on the first mutation position
-					for i in range(self.num_mutation_pos-1):
-						c[mutation_pos[i]] = c[mutation_pos[i+1]] # displacement
-					
-					c[mutation_pos[self.num_mutation_pos-1]] = tmp # move the value of the first mutation position to the last mutation position
-				offspring.append(copy.deepcopy(c))
-		return offspring
- 
-	def mutation(self):
-		for m in range(len(self.offspring_list)):
-			mutation_prob = np.random.rand()
-			if self.mutation_rate >= mutation_prob:
-				m_chg=list(np.random.choice(self.num_gene, self.num_mutation_pos, replace=False)) # chooses the position to mutation
-				t_value_last=self.offspring_list[m][m_chg[0]] # save the value which is on the first mutation position
-				for i in range(self.num_mutation_pos-1):
-					self.offspring_list[m][m_chg[i]]=self.offspring_list[m][m_chg[i+1]] # displacement
-				
-				self.offspring_list[m][m_chg[self.num_mutation_pos-1]]=t_value_last # move the value of the first mutation position to the last mutation position 
-    
-	def repairment(self, offspring):
-		"""
-		Fix offspring to be feasible solution
-		"""
-		fit = []
-		for child in offspring:
-			# print("child_before: ", child)
-			job_cnt = [0 for _ in range(self.num_job)]
-			insufficient_job = []
-			diff_list = []
-			for job_id in child:
-				job_cnt[job_id] += 1
-			for i in range(self.num_job):
-				# print(i)
-				diff = self.num_oht_per_job[i] - job_cnt[i]
-				if diff > 0:
-					insufficient_job += [i] * diff
-				diff_list.append(diff)
-
-			insufficient_job = list(np.random.permutation(insufficient_job))
-			# print("insufficient_job: ", insufficient_job)
-			# print("diff_list: ", diff_list)
-			for i in range(len(child)):
-				# replace insufficient job with insufficient job
-				if diff_list[child[i]] < 0:
-					diff_list[child[i]] += 1
-					child[i] = insufficient_job.pop()
-     
-			# print("child_after: ", child)
-			# input()
-			fit.append(self.cal_makespan(child))
-			
-		return offspring, fit
-	
-
-  
-	def replacement(self, offspring, offspring_fit):
-		self.pop_list = list(self.pop_list) + offspring
-		self.pop_fit = list(self.pop_fit) + offspring_fit
-
-		# Sort
-		tmp = sorted(list(zip(self.pop_fit, list(self.pop_list))))
-		self.pop_fit, self.pop_list = zip(*tmp)
-		self.pop_list = list(self.pop_list[:self.pop_size])
-		self.pop_fit = list(self.pop_fit[:self.pop_size])
-  
-		# print(self.pop_fit)
-		
-		self.Tbest_now = self.pop_fit[0]
-		sequence_now = copy.deepcopy(self.pop_list[0])
-
-		if self.Tbest_now < self.Tbest:
-			self.Tbest = self.Tbest_now
-			self.sequence_best = copy.deepcopy(sequence_now)
-			self.alloc_per_job_best = self.alloc_per_job
+		rk_offspring = []
+		for _ in range(round(self.pop_size * self.crossover_rate)):
+			## choose 2 parents from parent list
+			i, j = np.random.choice(len(parents), 2, replace = False)
+			p0, p1 = parents[i], parents[j]
+			rk_p0, rk_p1 = rk_parents[i], rk_parents[j]
    
-		# self.makespan_rec.append(self.Tbest)
+			offspring.append(self.mask_crossover(p0, p1))
+			rk_offspring.append(self.random_key_crossover(rk_p0, rk_p1))
+			# offspring.append(p0)
+			# rk_offspring.append(self.random_key_autoreproduction(rk_p0))
+			# offspring.append(p1)
+			# rk_offspring.append(self.random_key_autoreproduction(rk_p1))
+   
+		alloc_offspring = [[self.decide_task_type(rk) for rk in rk_offspring[idx]] for idx in range(len(rk_offspring))]
+
+		return offspring, rk_offspring, alloc_offspring
+  
+	def mask_crossover(self, parent0, parent1) -> list:
+		""" 
+		Args:
+			parents (list): choice parents
+		Returns:
+			list: offspring list
+		"""
+		## True for parent0; False for parent1
+		mask = [np.random.choice([False, True]) for _ in range(self.num_job)]
+		child = [-1 for _ in range(self.num_job)]
+		is_placed = [False for _ in range(self.num_job)]
+
+		## Using mask to fill in the value of parent0 into child
+		for i, p in enumerate(parent0):
+			if mask[i] == True:
+				child[i] = p
+				is_placed[p] = True
+
+		## Using p1_idx to find next index that can be filled in
+		p1_idx = 0
+		for i in range(self.num_job):
+			if mask[i] == False:
+				while p1_idx < self.num_job and is_placed[parent1[p1_idx]]:
+					p1_idx += 1	
+				if p1_idx >= self.num_job:
+					break
+				child[i] = parent1[p1_idx]
+				is_placed[parent1[p1_idx]] = True
+	
+		## Sequence mutation: choose 2 position to swap
+		if self.mutation_rate >= np.random.rand():
+			i, j = np.random.choice(self.num_job, 2, replace=False)
+			child[i], child[j] = child[j], child[i]
+		# child = self.relation_repairment(child)
+   
+		return child
+
+	def random_key_crossover(self, parent0, parent1) -> list:
+
+		child = (np.array(parent0) + np.array(parent1)) / 2
+
+		if self.rk_mutation_rate >= np.random.rand():
+			child = [c + np.random.normal() for c in child]
+
+		return child
+
+	def random_key_autoreproduction(self, parent) -> list:
+		child = []
+		for p in parent:
+			p_copy = p.copy()
+			np.random.shuffle(p_copy)
+			child.append(p_copy)
+		return child
+    
+	def relation_repairment(self, oht_seq) -> list:
+		"""
+		Maintain OHT sequence
+
+		Args:
+			oht_seq (list): original OHT sequence
+		Returns:
+			list: repaired OHT sequence
+		"""
+		output = []
+		oht_list = copy.deepcopy(self.oht_list)
+		is_scheduled = [False for _ in range(self.num_oht)]
+		swap = {}
+   
+		def find_prev_oht(oht: OHT):
+			if is_searched[oht.id]:
+				return oht.id
+			is_searched[oht.id] = True
+			if oht.prev:
+				can_choose = set()
+				for oht_p in oht.prev:
+					if is_scheduled[oht_p.id] == False:
+						can_choose.add(oht_p)
+				if can_choose:
+					return find_prev_oht(np.random.choice(list(can_choose)))
+				else:
+					return find_bind_oht(oht)
+			else:
+				return find_bind_oht(oht)
+
+		def find_bind_oht(oht: OHT):
+			if oht.bind == None:
+				return oht.id
+			else:
+				return find_prev_oht(oht.bind)
+   
+		for id in oht_seq:
+
+			## Replace current id with unused id
+			while swap.get(id):
+				id = swap.pop(id)
+
+			## Skip it if the oht is scheduled
+			if is_scheduled[id] == True:
+				continue
+			
+			## To avoid repeated searches '''
+			is_searched = [False for _ in range(self.num_oht)]
+
+			## Find oht which has no previous task
+			todo_id = find_prev_oht(oht_list[id])
+			
+			## add oht id to output
+			output.append(todo_id)
+			is_scheduled[todo_id] = True
+   
+			## add bind oht id to output if it exists
+			if oht_list[todo_id].bind != None:
+				output.append(oht_list[todo_id].bind.id)
+				is_scheduled[oht_list[todo_id].bind.id] = True
+
+			## Record the unused id
+			if todo_id != id:
+				swap[todo_id] = id
+ 
+		return output	
+
+	def replacement(self, offspring, rk_offspring, alloc_offspring) -> None:
+		"""
+		Replace worse pop by better offspring		
+		"""
+		offspring_fit = []
+		for i in range(len(offspring)):
+			offspring_fit.append(self.cal_makespan(offspring[i], alloc_offspring[i]))
+   
+		self.pop_list = list(self.pop_list) + offspring
+		self.pop_fit_list = list(self.pop_fit_list) + offspring_fit
+		self.rk_pop_list = list(self.rk_pop_list) + rk_offspring
+		self.alloc_pop_list = list(self.alloc_pop_list) + alloc_offspring
+
+		## Sort by pop fit
+		tmp = sorted(list(zip(self.pop_fit_list, list(self.pop_list), list(self.rk_pop_list), list(self.alloc_pop_list))), key=lambda x:x[0])
+		self.pop_fit_list, self.pop_list, self.rk_pop_list, self.alloc_pop_list = zip(*tmp)
+		self.pop_list = list(self.pop_list[:self.pop_size])
+		self.pop_fit_list = list(self.pop_fit_list[:self.pop_size])
+		self.rk_pop_list = list(self.rk_pop_list[:self.pop_size])
+		self.alloc_pop_list = list(self.alloc_pop_list[:self.pop_size])
+		
+		## Update local best
+		self.Tbest_local = self.pop_fit_list[0]
+		seq_best_local = self.pop_list[0]
+		alloc_best_local = self.alloc_pop_list[0]
+
+		## Update global best
+		if self.Tbest_local < self.Tbest:
+			self.Tbest = self.Tbest_local
+			self.seq_best = seq_best_local
+			self.alloc_best = alloc_best_local
    
 	def progress_bar(self, n):
 		bar_cnt = (int(((n+1)/self.num_iter)*20))
 		space_cnt = 20 - bar_cnt		
-		bar = "▇"*bar_cnt + " "*space_cnt
-		
-		print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best_now = {self.Tbest_now}, T-best = {self.Tbest}", end="")
+		bar = "▇" * bar_cnt + " " * space_cnt
+		if n+1 == self.num_iter:
+			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {[tt.name for tt in self.alloc_best]}")
+		else:
+			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {[tt.name for tt in self.alloc_best]}", end="")
    
-	def gantt_chart(self):
-		agent_time = [0 for _ in range(self.num_agent)]
-		job_time = [0 for _ in range(self.num_job)]
-		oht_cnt_per_job = [0 for _ in range(self.num_job)] # next task index for every job which should be executed
-		oht_dict = {}
-		for job_id in self.sequence_best: 
-      
-			job_id = int(job_id)
-
-			agent = int(self.alloc_per_job_best[job_id][oht_cnt_per_job[job_id]])
-	
-			oht = self.oht_list_per_job[job_id][oht_cnt_per_job[job_id]]
-   
-			agent_POS = {
-				"LH": self.POS["LH"],
-				"RH": self.POS["RH"],
-				"BOT": self.POS["BOT"],
-			}
-   
-			process_time = int(oht.get_oht_time(agent, agent_POS, self.POS, self.MTM))
-			# print("job_id: ", job_id)		
-			end_time = max(agent_time[agent], job_time[job_id]) + process_time
-			agent_time[agent] = end_time
-			job_time[job_id] = end_time
-
-			start_time = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
-			# start_time = j_count[i] - self.process_t[i][key_count[i]]
-			# print("s: ", start_time)
-			
-			end_time = str(timedelta(seconds = end_time))
-			# end_time = j_count[i]
-			# print("e:", end_time)
+	# def check_takeover(self, pop):
+	# 	for i, id in enumerate(pop):
+	# 		oht = self.oht_list[id]
+	# 		if oht.type in ["A", "DA"]:
+	# 			if oht.next.id
 				
-			oht_dict[(job_id, oht_cnt_per_job[job_id], agent)] = [start_time, end_time]
-			
-			oht_cnt_per_job[job_id] += 1
-			
-		tmp = []
-		for job_id, agent_seq in enumerate(self.alloc_per_job_best):
-			for i, a in enumerate(agent_seq):
-				tmp.append(dict(
-        			Task = f'{AGENT[a]}', 
-           			Start = f'2024-07-14 {(str(oht_dict[(job_id, i, a)][0]))}', 
-              		Finish = f'2024-07-14 {(str(oht_dict[(job_id, i, a)][1]))}',
-                	Resource =f'Job{job_id}')
-               	)
-			# for j in j_keys:
-				# df.append(dict(Task=f'Machine {m}', Start=j_record[(j,m)][0], Finish=j_record[(j,m)][1]*1000, Resource=f'Job {j+1}'))
-		
-		df = pd.DataFrame(tmp)
 
-		# fig = px.timeline(df, index_col='Resource', show_colorbar=True, group_tasks=True, showgrid_x=True, title='Job shop Schedule')
-		# py.iplot(fig, filename='GA_job_shop_scheduling', world_readable=True)
+	def cal_makespan(self, pop:list, alloc_pop:list):
+		"""
+		Returns:
+			int: makespan calculated by scheduling
+		"""
+		agent_time = [0 for _ in range(2)] # 0: human; 1: robot
 
-		fig = px.timeline(df, x_start='Start', x_end='Finish', y='Task', color='Resource', title='Job shop Schedule')
+		## Record end time of each OHT
+		oht_end_time = [0 for _ in range(self.num_job)]
+		for job_id in pop:
+			task_type:TaskType = alloc_pop[job_id]
+			job:JOB = self.job_list[job_id]
+			process_time = self.job_time[job_id][task_type.value]
+
+			if task_type == TaskType.MANUAL:
+				agent_time[0] += process_time
+
+			elif task_type == TaskType.ROBOT:
+				agent_time[1] += process_time
+    
+			else:
+				agent_time[0] += process_time
+				agent_time[1] += process_time
+
+		makespan = max(agent_time)
+		return makespan
+
+	def interference_PUN(self, timestamps):
+     	## Handle interference problem
+		i, j, k = 0, 0, 0
+		lh_now, rh_now, bot_now = dh.POS['LH'], dh.POS['RH'], dh.POS['BOT']
+		pun = 0
+  
+		## Compare the x-coord of LH and RH; compare the z_coord of robot and hands
+		while i < len(timestamps[0]) or j < len(timestamps[1]) or k < len(timestamps[2]):
+			## Check interference
+			if lh_now[0] > rh_now[0] \
+   			or lh_now[2] > bot_now[2] \
+      		or rh_now[2] > bot_now[2]:
+				pun = self.PUN_val
+				break
+			## Renew agent position
+			if i >= len(timestamps[0]):
+				if j >= len(timestamps[1]):
+					bot_now = timestamps[2][k][1]
+					k += 1
+				elif k >= len(timestamps[2]):
+					rh_now = timestamps[1][j][1]
+					j += 1
+				else:
+					if timestamps[1][j][0] < timestamps[2][k][0]:
+						rh_now = timestamps[1][j][1]
+						j += 1 
+					elif timestamps[1][j][0] > timestamps[2][k][0]:
+						bot_now = timestamps[2][k][1]
+						k += 1
+					else:
+						rh_now = timestamps[1][j][1]
+						j += 1 
+						bot_now = timestamps[2][k][1]
+						k += 1
+			elif j >= len(timestamps[1]):
+				if k >= len(timestamps[2]):	
+					lh_now = timestamps[0][i][1]
+					i += 1
+				else:
+					if timestamps[0][i][0] < timestamps[2][k][0]:
+						lh_now = timestamps[0][i][1]
+						i += 1 
+					elif timestamps[0][i][0] > timestamps[2][k][0]:
+						bot_now = timestamps[2][k][1]
+						k += 1 
+					else:
+						lh_now = timestamps[0][i][1]
+						i += 1 
+						bot_now = timestamps[2][k][1]
+						k += 1 
+			elif k >= len(timestamps[2]):
+				if timestamps[0][i][0] < timestamps[1][j][0]:
+					lh_now = timestamps[0][i][1]
+					i += 1 
+				elif timestamps[0][i][0] < timestamps[1][j][0]:
+					rh_now = timestamps[1][j][1]
+					j += 1 
+				else:
+					lh_now = timestamps[0][i][1]
+					i += 1 
+					rh_now = timestamps[1][j][1]
+					j += 1 
+			else:
+				if timestamps[0][i][0] < min(timestamps[1][j][0], timestamps[2][k][0]):
+					lh_now = timestamps[0][i][1]
+					i += 1
+				elif timestamps[1][j][0] < min(timestamps[0][i][0], timestamps[2][k][0]):
+					rh_now = timestamps[1][j][1]
+					j += 1
+				elif timestamps[2][k][0] < min(timestamps[0][i][0], timestamps[1][j][0]):
+					bot_now = timestamps[2][k][1]
+					k += 1
+				else:
+					lh_now = timestamps[0][i][1]
+					i += 1
+					rh_now = timestamps[1][j][1]
+					j += 1
+		return pun
+   
+	def show_result(self):
+     
+		agent_time = [0 for _ in range(self.num_agent)]
+		agent_POS = ["LH", "RH", "BOT"]
+  
+		gantt_dict = []
+		path_dict = [[] for _ in range(3)] 
+  
+		oht_end_time = [0 for _ in range(self.num_job)]
+		bind_is_scheduled = False
+		bind_end_time = 0
+
+		print("\n")
+		print(f"Best fit: \n-----\t", self.Tbest)
+		print(f"Best OHT sequence: \n-----\t", self.seq_best[:-1])
+		print(f"Best choice of agent: \n-----\t", [tt.name for tt in self.alloc_best])
+		print(self.pop_fit_list)
+  
+		agent_time = [0 for _ in range(2)] # 0: human; 1: robot
+
+		## Record end time of each OHT
+		oht_end_time = [0 for _ in range(self.num_job)]
+		for job_id in self.seq_best:
+			task_type:TaskType = self.alloc_best[job_id]
+			job:JOB = self.job_list[job_id]
+			process_time = self.job_time[job_id][task_type.value]
+
+			if task_type == TaskType.MANUAL:
+				agent_time[0] += process_time
+				end_time = agent_time[0]
+
+			elif task_type == TaskType.ROBOT:
+				agent_time[1] += process_time
+				end_time = agent_time[1]
+    
+			else:
+				tmp = max(agent_time[0], agent_time[1])
+				end_time = tmp + process_time
+				agent_time[0] = end_time
+				agent_time[1] = end_time
+    
+			start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
+			end_time_delta = str(timedelta(seconds = end_time))
+			gantt_dict.append(dict(
+				TaskType = f'{task_type.name}', 
+				Start = f'2024-06-11 {(str(start_time_delta))}', 
+				Finish = f'2024-06-11 {(str(end_time_delta))}',
+				Resource =f'JOB{job_id}({self.job_list[job_id].type})')
+            	)
+			
+			# prefix_time = float(end_time - process_time)
+			# for tb in self.job_list[job_id].flat():
+			# 	path_dict[agent].append(dict(
+			# 		TaskId = oht.id,
+			# 		Name = tb.name,
+			# 		Start = prefix_time,
+			# 		Position = tb.To,
+			# 		time = tb.time
+			# 	))
+			# 	prefix_time += tb.time
+		gantt_df = pd.DataFrame(gantt_dict)
+		fig = px.timeline(
+      		gantt_df,
+			x_start='Start', 
+			x_end='Finish', 
+			y='TaskType', 
+			color='Resource', 
+			title='Schedule', 
+			color_discrete_sequence=px.colors.qualitative.Plotly + px.colors.qualitative.Pastel,
+			category_orders={
+				'Agent': ['BOT', 'RH', 'LH'],
+				'Resource': [f"OHT{i}" for i in range(self.num_oht - 1)]
+			},
+			text='Resource'
+   		)
 		fig.update_yaxes(autorange="reversed")
 		fig.show()
   
-# solver = GASolver()
+# solver = GASolver([1,0,2])
 # solver.run()
