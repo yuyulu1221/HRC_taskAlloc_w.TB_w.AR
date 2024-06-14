@@ -2,6 +2,7 @@
 from math import inf
 from enum import Enum
 from multiprocessing import process
+from sqlite3 import TimestampFromTicks
 import pandas as pd
 import numpy as np
 import copy
@@ -84,16 +85,15 @@ class GAJobSolver():
 		print("\n")
 		self.show_result()
 		return self.Tbest
-	
+
+	def job_scheduling(self, oht_seq:list, ag_id_pair:tuple):	
+		return
+
 	def cal_job_time(self):
 
 		for job_id, job in enumerate(self.job_list):
-			ag_time = [0] * self.num_agent
 			oht_seq = [oht.id for oht in job.oht_list]
 			oht_seq = self.relation_repairment(oht_seq)
-			oht_end_time = [0] * self.num_oht
-			bind_is_scheduled = False
-			bind_end_time = 0
    
 			for task_type in TaskType:
 				if task_type == TaskType.MANUAL: 
@@ -102,17 +102,25 @@ class GAJobSolver():
 				elif task_type == TaskType.HRC:
 					ag_id_pair = [(0, 2), (1, 2), (2, 0), (2, 1)]
 	
-				else:
+				elif task_type == TaskType.ROBOT:
 					ag_id_pair = [(2, 2)]
+     
+				else:
+					print("Invalid task type")
 
 				min_job_time = 9999999
 				min_job_oht_alloc = (-1, -1)
+				max_job_time = 0
+				max_job_oht_alloc = (-1, -1)
 				for ag_id, bind_ag_id in ag_id_pair:
+					ag_time = [0] * self.num_agent
+					oht_end_time = [0] * self.num_oht
+					bind_is_scheduled = False
+					bind_end_time = 0
 					for oht_id in oht_seq:	
-						ag_pos = AGENT[ag_id]
-						bind_ag_pos = AGENT[bind_ag_id]
 						
 						oht:OHT = self.oht_list[oht_id]
+						ag_pos = AGENT[ag_id]
 						process_time = int(oht.get_oht_time(ag_pos, ag_id))
 						remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
 
@@ -121,12 +129,13 @@ class GAJobSolver():
 							bind_is_scheduled = False
 			
 						elif oht.bind != None:
+							bind_is_scheduled = True
+       
 							if task_type == TaskType.ROBOT:
 								bind_end_time = self.PUN_val
 								end_time = self.PUN_val
 
 							else:
-								## Find the end time of current OHT
 								job_time = 0
 								if oht.prev:
 									job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
@@ -141,17 +150,19 @@ class GAJobSolver():
 									bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
 								bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
 
-								bind_is_scheduled = True
-
 								bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
 								end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
 						
-						## Normal OHT with previous OHT
+						## HRC for simple task is not allowed
+						elif task_type == TaskType.HRC:
+							bind_end_time = self.PUN_val
+							end_time = self.PUN_val					
+       
+      					## Normal OHT with previous OHT
 						elif oht.prev:
-							job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-							start_time = max(ag_time[ag_id], job_time)
-							end_time = start_time + process_time
-				
+								job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+								start_time = max(ag_time[ag_id], job_time)
+								end_time = start_time + process_time
 						else:
 							start_time = ag_time[ag_id]
 							end_time = start_time + process_time
@@ -162,10 +173,17 @@ class GAJobSolver():
 						if end_time < min_job_time:
 							min_job_time = end_time
 							min_job_oht_alloc = (ag_id, bind_ag_id)
+						if end_time > max_job_time:
+							max_job_time = end_time
+							max_job_oht_alloc = (ag_id, bind_ag_id)
 
-				print(f"job_time[{job_id}][{task_type.name}] = {min_job_time}, {min_job_oht_alloc}")
-				self.job_time[job_id][task_type.value] = min_job_time
-				self.job_oht_alloc[job_id][task_type.value] = min_job_oht_alloc
+				# print(f"job_time[{job_id}][{task_type.name}] = {min_job_time}, {min_job_oht_alloc}")
+				# self.job_time[job_id][task_type.value] = min_job_time
+				# self.job_oht_alloc[job_id][task_type.value] = min_job_oht_alloc
+
+				print(f"job_time[{job_id}][{task_type.name}] = {max_job_time}, {max_job_oht_alloc}")
+				self.job_time[job_id][task_type.value] = max_job_time
+				self.job_oht_alloc[job_id][task_type.value] = max_job_oht_alloc
 
 		# print(self.job_time)
  
@@ -379,7 +397,7 @@ class GAJobSolver():
 				output.append(oht_list[todo_id].bind.id)
 				is_scheduled[oht_list[todo_id].bind.id] = True
 
-			## Record the unused id
+			## record the unused id
 			if todo_id != id:
 				swap[todo_id] = id
  
@@ -542,14 +560,9 @@ class GAJobSolver():
 	def show_result(self):
      
 		agent_time = [0 for _ in range(self.num_agent)]
-		agent_POS = ["LH", "RH", "BOT"]
   
 		gantt_dict = []
 		path_dict = [[] for _ in range(3)] 
-  
-		oht_end_time = [0 for _ in range(self.num_job)]
-		bind_is_scheduled = False
-		bind_end_time = 0
 
 		print("\n")
 		print(f"Best fit: \n-----\t", self.Tbest)
@@ -560,11 +573,10 @@ class GAJobSolver():
 		agent_time = [0 for _ in range(2)] # 0: human; 1: robot
 
 		## Record end time of each OHT
-		oht_end_time = [0 for _ in range(self.num_job)]
 		for job_id in self.seq_best:
 			task_type:TaskType = self.alloc_best[job_id]
-			job:JOB = self.job_list[job_id]
 			process_time = self.job_time[job_id][task_type.value]
+			ag_id, bind_ag_id = self.job_oht_alloc[job_id][task_type.value]
 
 			if task_type == TaskType.MANUAL:
 				agent_time[0] += process_time
@@ -589,16 +601,23 @@ class GAJobSolver():
 				Resource =f'JOB{job_id}({self.job_list[job_id].type})')
             	)
 			
-			# prefix_time = float(end_time - process_time)
-			# for tb in self.job_list[job_id].flat():
-			# 	path_dict[agent].append(dict(
-			# 		TaskId = oht.id,
-			# 		Name = tb.name,
-			# 		Start = prefix_time,
-			# 		Position = tb.To,
-			# 		time = tb.time
-			# 	))
-			# 	prefix_time += tb.time
+			prefix_time = float(end_time - process_time)
+			for oht in self.job_list[job_id].flat():
+				for tb in oht.flat():
+					path_dict[ag_id].append(dict(
+						JobId = job_id,
+						TaskId = oht.id,
+						Name = tb.name,
+						Start = prefix_time,
+						Position = tb.To,
+						time = tb.time
+					))
+				prefix_time += tb.time
+   
+		for a, pathd in enumerate(path_dict):
+			path_df = pd.DataFrame(pathd)
+			path_df.to_csv(f"./data/job_result_{self.procedure_id}_{AGENT[a]}.csv" ,index=False)
+    
 		gantt_df = pd.DataFrame(gantt_dict)
 		fig = px.timeline(
       		gantt_df,

@@ -33,7 +33,7 @@ class Agent(Enum):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=120, num_iter=100, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
+	def __init__(self, id, oht_list, pop_size=220, num_iter=200, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   
@@ -624,7 +624,7 @@ class GASolver():
 
 		for a, pathd in enumerate(path_dict):
 			path_df = pd.DataFrame(pathd)
-			path_df.to_csv(f"./data/result_{self.procedure_id}_{AGENT[a]}.csv" ,index=False)
+			path_df.to_csv(f"./data/oht_result_{self.procedure_id}_{AGENT[a]}.csv" ,index=False)
   
 		## Draw gantt chart
 		gantt_df = pd.DataFrame(gantt_dict)

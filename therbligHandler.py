@@ -38,7 +38,7 @@ class Therblig(object):
     
     def get_tb_time(self, ag_pos, ag_id) -> int:
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
-        if self.name in ["R", "M"]:
+        if self.is_moving_tb():
             if ag_id == 2: # BOT
                 if self.From =="AGENT":
                     p1 = ag_pos
@@ -67,9 +67,7 @@ class Therblig(object):
             return dh.MTM.at[self.name, AGENT[ag_id]]
         
     def is_moving_tb(self):
-        if self.name in ["R", "M"]:
-            return True
-        return False
+        return self.name in ["R", "M"]
 
 
 #%% 動素序列
@@ -108,7 +106,7 @@ class OHT:
                 self.type = "A"
                 break
             elif tb.name == "DA":
-                self.type = "A"
+                self.type = "DA"
                 break
                 
         # self.is_scheduled = False
@@ -167,8 +165,10 @@ class JOB:
                 self.type = "A"
                 break
             elif oht.type == "DA":
-                self.type = "A"
+                self.type = "DA"
                 break
+    def flat(self):
+        return self.oht_list
         
         
 #%% TBHandler
@@ -202,7 +202,8 @@ class TBHandler(object):
                 tmp.append(tb)
                 if tb.name == "RL":
                     # self.list.append(tmp.copy())
-                    tmp.append(Therblig("R", tb.To, tb.To + "_TOP", "B"))
+                    if tb.To[-3:] != "TOP":
+                        tmp.append(Therblig("R", tb.To, tb.To + "_TOP", "B"))
                     oht = OHT(tmp.copy())
                     self.oht_list.append(oht)
                     job.append(oht)

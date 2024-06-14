@@ -3,7 +3,7 @@ from GAScheduling_oht import *
 from therbligHandler import *
 import optuna
 
-procedure_id = "final3"
+procedure_id = "final4"
 num_tbs = 7
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)
@@ -55,7 +55,7 @@ def job_optuna_run():
 			'mutation_rate': trial.suggest_float("mutation_rate", 0.01, 0.025),
 			'rk_mutation_rate': trial.suggest_float("rk_mutation_rate", 0.01, 0.025),
 			'rk_iter_change_rate': trial.suggest_float("rk_iter_change_rate", 0.4, 0.8)
-		}+98
+		}
 		solver = GAJobSolver(id, job_list, oht_list, **param_grid)
 		Tbest = solver.run()
 		return Tbest
@@ -70,8 +70,8 @@ def job_optuna_run():
 
 ## Run Method
 # test()
-# oht_simple_run()
+oht_simple_run()
 # optuna_run()
 
-job_simple_run()
+# job_simple_run()
 # job_optuna_run()
