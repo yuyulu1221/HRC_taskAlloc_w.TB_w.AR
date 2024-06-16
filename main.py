@@ -2,6 +2,7 @@ from GAScheduling_job import GAJobSolver
 from GAScheduling_oht import *
 from therbligHandler import *
 import optuna
+import dataHandler
 
 procedure_id = "final4"
 num_tbs = 7
@@ -68,9 +69,17 @@ def job_optuna_run():
 	print('Values: ', study.best_trial.value)
 	print('para', study.best_trial.user_attrs)
 
+
+while True:
+	cmd = input()
+	if cmd == 'oht':
+		oht_simple_run()
+	elif cmd == 'job':
+		job_simple_run()
+	
 ## Run Method
 # test()
-oht_simple_run()
+# oht_simple_run()
 # optuna_run()
 
 # job_simple_run()

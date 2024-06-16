@@ -33,7 +33,7 @@ class Agent(Enum):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=220, num_iter=200, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
+	def __init__(self, id, oht_list, pop_size=220, num_iter=200, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   

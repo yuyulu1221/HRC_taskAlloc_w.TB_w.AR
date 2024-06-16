@@ -66,7 +66,6 @@ class GAJobSolver():
   
 		self.job_time = [[-1, -1, -1] for _ in range(self.num_job)]
 		self.job_oht_alloc = [[(-1, -1), (-1, -1), (-1, -1)] for _ in range(self.num_job)]
-		print(self.job_oht_alloc)
   
 		self.PUN_val = 1000000
 	
@@ -97,13 +96,17 @@ class GAJobSolver():
    
 			for task_type in TaskType:
 				if task_type == TaskType.MANUAL: 
-					ag_id_pair = [(0, 1), (1, 0)]
+					tmp = [(0, 1), (1, 0)]
+					i = np.random.randint(0, len(tmp))
+					ag_id_pair = tmp[i]
 					
 				elif task_type == TaskType.HRC:
-					ag_id_pair = [(0, 2), (1, 2), (2, 0), (2, 1)]
+					tmp = [(0, 2), (1, 2), (2, 0), (2, 1)]
+					i = np.random.randint(0, len(tmp))
+					ag_id_pair = tmp[i]
 	
 				elif task_type == TaskType.ROBOT:
-					ag_id_pair = [(2, 2)]
+					ag_id_pair = (2, 2)
      
 				else:
 					print("Invalid task type")
@@ -112,80 +115,70 @@ class GAJobSolver():
 				min_job_oht_alloc = (-1, -1)
 				max_job_time = 0
 				max_job_oht_alloc = (-1, -1)
-				for ag_id, bind_ag_id in ag_id_pair:
-					ag_time = [0] * self.num_agent
-					oht_end_time = [0] * self.num_oht
-					bind_is_scheduled = False
-					bind_end_time = 0
-					for oht_id in oht_seq:	
-						
-						oht:OHT = self.oht_list[oht_id]
-						ag_pos = AGENT[ag_id]
-						process_time = int(oht.get_oht_time(ag_pos, ag_id))
-						remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
+    
+				ag_id, bind_ag_id = ag_id_pair
+				ag_time = [0] * self.num_agent
+				oht_end_time = [0] * self.num_oht
+				bind_is_scheduled = False
+				bind_end_time = 0
+				for oht_id in oht_seq:	
+					
+					oht:OHT = self.oht_list[oht_id]
+					ag_pos = AGENT[ag_id]
+					process_time = int(oht.get_oht_time(ag_pos, ag_id))
+					remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
 
-						if bind_is_scheduled:
-							end_time = bind_end_time
-							bind_is_scheduled = False
-			
-						elif oht.bind != None:
-							bind_is_scheduled = True
-       
-							if task_type == TaskType.ROBOT:
-								bind_end_time = self.PUN_val
-								end_time = self.PUN_val
-
-							else:
-								job_time = 0
-								if oht.prev:
-									job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-								end_time = max(ag_time[ag_id], job_time) + process_time
-								
-								## Find the end time of bind OHT
-								bind_ag_pos = AGENT[bind_ag_id]
-								bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
-								bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
-								bind_job_time = 0
-								if oht.bind.prev:
-									bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
-								bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
-
-								bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
-								end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
-						
-						## HRC for simple task is not allowed
-						elif task_type == TaskType.HRC:
+					if bind_is_scheduled:
+						end_time = bind_end_time
+						bind_is_scheduled = False
+		
+					elif oht.bind != None:
+						bind_is_scheduled = True
+	
+						if task_type == TaskType.ROBOT:
 							bind_end_time = self.PUN_val
-							end_time = self.PUN_val					
-       
-      					## Normal OHT with previous OHT
-						elif oht.prev:
-								job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-								start_time = max(ag_time[ag_id], job_time)
-								end_time = start_time + process_time
+							end_time = self.PUN_val
+
 						else:
-							start_time = ag_time[ag_id]
+							job_time = 0
+							if oht.prev:
+								job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+							end_time = max(ag_time[ag_id], job_time) + process_time
+							
+							## Find the end time of bind OHT
+							bind_ag_pos = AGENT[bind_ag_id]
+							bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
+							bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
+							bind_job_time = 0
+							if oht.bind.prev:
+								bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
+							bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
+
+							bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
+							end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
+					
+					## HRC for simple task is not allowed
+					elif task_type == TaskType.HRC:
+						bind_end_time = self.PUN_val
+						end_time = self.PUN_val					
+	
+					## Normal OHT with previous OHT
+					elif oht.prev:
+							job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+							start_time = max(ag_time[ag_id], job_time)
 							end_time = start_time + process_time
+					else:
+						start_time = ag_time[ag_id]
+						end_time = start_time + process_time
 
-						ag_time[ag_id] = end_time
-						oht_end_time[oht_id] = end_time
-      
-						if end_time < min_job_time:
-							min_job_time = end_time
-							min_job_oht_alloc = (ag_id, bind_ag_id)
-						if end_time > max_job_time:
-							max_job_time = end_time
-							max_job_oht_alloc = (ag_id, bind_ag_id)
+					ag_time[ag_id] = end_time
+					oht_end_time[oht_id] = end_time
 
-				# print(f"job_time[{job_id}][{task_type.name}] = {min_job_time}, {min_job_oht_alloc}")
-				# self.job_time[job_id][task_type.value] = min_job_time
-				# self.job_oht_alloc[job_id][task_type.value] = min_job_oht_alloc
+					self.job_time[job_id][task_type.value] = end_time
+					self.job_oht_alloc[job_id][task_type.value] = ag_id_pair
 
-				print(f"job_time[{job_id}][{task_type.name}] = {max_job_time}, {max_job_oht_alloc}")
-				self.job_time[job_id][task_type.value] = max_job_time
-				self.job_oht_alloc[job_id][task_type.value] = max_job_oht_alloc
-
-		# print(self.job_time)
+		print(self.job_time)
+		print(self.job_oht_alloc)
  
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
@@ -605,7 +598,6 @@ class GAJobSolver():
 			for oht in self.job_list[job_id].flat():
 				for tb in oht.flat():
 					path_dict[ag_id].append(dict(
-						JobId = job_id,
 						TaskId = oht.id,
 						Name = tb.name,
 						Start = prefix_time,

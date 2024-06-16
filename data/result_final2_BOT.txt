@@ -1,9 +1,0 @@
-1, new List<TaskData>>
-new TaskData { Therblig="R", Position=POS["WP2_TOP"], Time=0.15839999999999999f },
-new TaskData { Therblig="R", Position=POS["WP2"], Time=0.3204f },
-new TaskData { Therblig="G", Position=POS["WP2"], Time=0.15839999999999999f },
-new TaskData { Therblig="M", Position=POS["WP2_TOP"], Time=0.3204f },
-new TaskData { Therblig="M", Position=POS["A2_TOP"], Time=0.15839999999999999f },
-new TaskData { Therblig="A", Position=POS["A2_TOP"], Time=0.15839999999999999f },
-new TaskData { Therblig="M", Position=POS["A2"], Time=0.3204f },
-new TaskData { Therblig="RL", Position=POS["A2"], Time=0.15839999999999999f },
