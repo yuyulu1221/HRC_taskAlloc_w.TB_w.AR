@@ -78,6 +78,10 @@ while True:
 		job_simple_run()
 	elif cmd == 'test':
 		test()
+	elif cmd == 'optoht':
+		oht_optuna_run()
+	elif cmd == 'optjob':
+		job_optuna_run()
 	
 ## Run Method
 # test()
