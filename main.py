@@ -76,6 +76,8 @@ while True:
 		oht_simple_run()
 	elif cmd == 'job':
 		job_simple_run()
+	elif cmd == 'test':
+		test()
 	
 ## Run Method
 # test()

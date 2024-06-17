@@ -36,20 +36,34 @@ class Therblig(object):
     def __repr__(self):
         return f"#{str(self.name)}"    
     
-    def get_tb_time(self, ag_pos, ag_id) -> int:
+    def get_tb_time(self, ag_pos:str, ag_id:int) -> int:
         # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
         if self.is_moving_tb():
+            # print(AGENT[ag_id], ag_pos, self.From, self.To)
             if ag_id == 2: # BOT
-                if self.From =="AGENT":
+                if self.From == "AGENT" and self.To == "AGENT":
+                    print('???')
+                elif self.From =="AGENT":
                     p1 = ag_pos
                     p1, p2 = sorted([p1, self.To])
+                elif self.To == "AGENT":
+                    p2 = ag_pos
+                    p1, p2 = sorted([self.From, p2])
                 else:
                     p1, p2 = sorted([self.From, self.To])
-                self.time = dh.BOTM.at[f"{p1}<->{p2}", "Time"]
+                    
+                if p1 == p2:
+                    self.time = 0
+                else:
+                    self.time = dh.BOTM.at[f"{p1}<->{p2}", "Time"]
+                    
                 return int(self.time)
 
+            ## LH and RH: Read MTM table
             if self.From == "AGENT":
                 dist = np.linalg.norm(dh.POS[self.To] - dh.POS[ag_pos])
+            elif self.To == "AGENT":
+                dist = np.linalg.norm(dh.POS[ag_pos] - dh.POS[self.From])
             else:
                 dist = np.linalg.norm(dh.POS[self.To] - dh.POS[self.From])
             
@@ -125,36 +139,63 @@ class OHT:
         self.prev.append(p)
     
     def get_oht_time(self, ag_pos, ag_id):
+        # print("##### get oht time #####")
         oht_t = 0
-        for tb in self.tb_list:
-            oht_t += tb.get_tb_time(ag_pos, ag_id)
+        if ag_id == 2:
+            for tb in self.tb_list[:-1]:
+                oht_t += tb.get_tb_time(ag_pos, ag_id)
+        else:
+            for tb in self.tb_list:
+                oht_t += tb.get_tb_time(ag_pos, ag_id)
+        # print("#####")
         return oht_t
     
     def get_bind_remain_time(self, ag_pos, ag_id):
+        # print("&&&&& get bind remain time &&&&&")
         rem_t = 0
         for tb in self.tb_list[::-1]:
             if tb.name in ['A', 'DA']:
                 break
             rem_t += tb.get_tb_time(ag_pos, ag_id)
+        # print("&&&&&")    
         return rem_t
     
     def get_timestamp(self, ag_pos, ag_id):
+        # print("!!!!! get bind remain time !!!!!")
         oht_t = 0
         timestamps = []
         for tb in self.tb_list:
             oht_t += tb.get_tb_time(ag_pos, ag_id)
             if tb.is_moving_tb(): 
-                timestamps.append((oht_t, dh.POS[tb.To]))
+                if tb.To == 'AGENT':
+                    timestamps.append((oht_t, dh.POS[ag_pos]))
+                else: 
+                    timestamps.append((oht_t, dh.POS[tb.To]))
+        # print("!!!!!")
         return timestamps
     
     def flat(self):
         return self.tb_list
     
-    def renew_agent_pos(self, agent_pos, agent):
-        for tb in self.tb_list[::-1]:
+    def renew_agent_pos(self, ag_pos_d, ag_id):
+        if ag_id != 2:
+            return
+        ## find the last movable therblig and change
+        for tb in self.tb_list[-2::-1]:
             if tb.name in ['R', 'M']:
-                agent_pos[agent] = tb.To
+                # print(f"------------ ag_pos_d[{ag_id}] = {tb.To}")
+                ag_pos_d[ag_id] = tb.To
                 break
+                
+        ## LH and RH may go back to origin position
+        # else:
+        #     for tb in self.tb_list[::-1]: # why reverse
+        #         if tb.name in ['R', 'M']:
+        #             if tb.To == "AGENT":
+        #                 tb.To = tmp
+        #             ag_pos_d[ag_id] = tb.To
+        #             break
+        
             
 class JOB:
     def __init__(self, ls:list):
@@ -201,9 +242,11 @@ class TBHandler(object):
             for tb in tbs.list:
                 tmp.append(tb)
                 if tb.name == "RL":
-                    # self.list.append(tmp.copy())
                     if tb.To[-3:] != "TOP":
                         tmp.append(Therblig("R", tb.To, tb.To + "_TOP", "B"))
+                        tmp.append(Therblig("R", tb.To + "_TOP", "AGENT", "B"))
+                    else:
+                        tmp.append(Therblig("R", tb.To, "AGENT", "B"))
                     oht = OHT(tmp.copy())
                     self.oht_list.append(oht)
                     job.append(oht)

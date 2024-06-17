@@ -33,7 +33,7 @@ class Agent(Enum):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=220, num_iter=200, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
+	def __init__(self, id, oht_list, pop_size=120, num_iter=100, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   
@@ -65,8 +65,8 @@ class GASolver():
 		self.PUN_val = 100000
   
 	def test(self):
-		pop = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-		alloc_pop = [0, 2, 2, 2, 0, 1, 0, 1, 0, 1]
+		pop = [0, 1, 7, 6, 9, 8, 5, 4, 3, 2]
+		alloc_pop = [0, 1, 1, 2, 0, 1, 1, 0, 0, 1]
 		print(self.cal_makespan(pop, alloc_pop))
 		# self.show_result()
   
@@ -357,9 +357,13 @@ class GASolver():
 		timestamps = [[], [], []]
 
 		for oht_id in pop:
+			
 			ag_id = alloc_pop[oht_id]
 			oht:OHT = self.oht_list[oht_id]
+			# print("@1", ag_id)
+			# print("########### ", cur_pos)
 			process_time = int(oht.get_oht_time(cur_pos[ag_id], ag_id))
+			# print("########### ", cur_pos)
 			remain_time = oht.get_bind_remain_time(cur_pos[ag_id], ag_id)
 
 			if bind_is_scheduled:
@@ -377,7 +381,10 @@ class GASolver():
 				
 				## Find the end time of bind OHT
 				bind_ag_id = alloc_pop[oht.bind.id]
+				# print("@2", bind_ag_id)
+				# print("########### ", cur_pos)
 				bind_process_time = int(oht.bind.get_oht_time(cur_pos[bind_ag_id], bind_ag_id))
+				# print("########### ", cur_pos)
 				bind_remain_time = oht.bind.get_bind_remain_time(cur_pos[bind_ag_id], bind_ag_id)
 				bind_job_time = 0
 				if oht.bind.prev:
@@ -395,13 +402,14 @@ class GASolver():
 				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time + same_agent_PUN
 
 				start_time = end_time - process_time
+    
 				tmp = oht.get_timestamp(cur_pos[ag_id], ag_id)
 				for t, pos in tmp:
 					timestamps[ag_id].append((start_time + t, pos))
 				oht.renew_agent_pos(cur_pos, ag_id)
 
 				bind_start_time = bind_end_time - bind_process_time
-				tmp = oht.get_timestamp(cur_pos[ag_id], bind_ag_id)
+				tmp = oht.get_timestamp(cur_pos[bind_ag_id], bind_ag_id)
 				for t, pos in tmp:
 					timestamps[bind_ag_id].append((bind_start_time + t, pos))
 				oht.bind.renew_agent_pos(cur_pos, bind_ag_id)
@@ -433,7 +441,7 @@ class GASolver():
 
 		
 		
-		makespan = max(ag_time) + self.interference_PUN(timestamps)
+		makespan = max(ag_time) + self.interference_PUN(timestamps) * 2
 		## Verify interference punishment
 		# if makespan < self.PUN_val:
 		# 	print(pop)
@@ -462,9 +470,10 @@ class GASolver():
 		## Compare the x-coord of LH and RH; compare the z_coord of robot and hands
 		while i < len(timestamps[0]) or j < len(timestamps[1]) or k < len(timestamps[2]):
 			## Check interference
-			if lh_now[0] > rh_now[0] \
-   			or lh_now[2] > bot_now[2] \
-      		or rh_now[2] > bot_now[2]:
+			# if lh_now[0] > rh_now[0] \
+			if lh_now[2] > bot_now[2] \
+			or rh_now[2] > bot_now[2]:
+				# print(lh_now, rh_now, bot_now)
 				pun = self.PUN_val
 				break
 			## Renew agent position
@@ -559,9 +568,9 @@ class GASolver():
 			## Use already calculated data when scheduling second binded OHT
 			ag_id = self.alloc_best[oht_id]
 			oht:OHT = self.oht_list[oht_id]
+			# print("@3", ag_id)
 			process_time = int(oht.get_oht_time(ag_pos[ag_id], ag_id))
 			remain_time = int(oht.get_bind_remain_time(ag_pos[ag_id], ag_id))
-			oht.renew_agent_pos(ag_pos, ag_id)
 
 			## Same as cal_makespan
 			if bind_is_scheduled:
@@ -578,6 +587,8 @@ class GASolver():
     
 				## Find the end time of bind OHT
 				bind_ag_id = self.alloc_best[self.oht_list[oht_id].bind.id]
+				# print("@4", bind_ag_id)
+    
 				bind_process_time = int(oht.bind.get_oht_time(ag_pos[bind_ag_id], bind_ag_id))
 				bind_remain_time = oht.bind.get_bind_remain_time(ag_pos[bind_ag_id], bind_ag_id)
 				bind_job_time = 0
@@ -601,6 +612,9 @@ class GASolver():
     
 			agent_time[ag_id] = end_time
 			oht_end_time[oht_id] = end_time
+   
+			oht.renew_agent_pos(ag_pos, ag_id)
+			oht.renew_agent_pos(ag_pos, bind_ag_id)
    
 			start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
 			end_time_delta = str(timedelta(seconds = end_time))
