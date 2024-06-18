@@ -148,7 +148,7 @@ class OHT:
         oht_t = 0
         ## Won't go back to origin point when agent is BOT
         if ag_id == 2:
-            for tb in self.tb_list[:-1]:
+            for tb in self.tb_list:
                 oht_t += tb.get_tb_time(ag_pos, ag_id)
         else:
             for tb in self.tb_list:

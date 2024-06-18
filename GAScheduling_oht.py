@@ -33,7 +33,7 @@ class Agent(Enum):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=160, num_iter=100, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
+	def __init__(self, id, oht_list, pop_size=260, num_iter=200, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   
@@ -65,9 +65,9 @@ class GASolver():
 		self.PUN_val = 100000
   
 	def test(self):
-		pop = [0, 1, 7, 6, 3, 5, 4, 9, 2, 8]
-		alloc_pop = [0, 1, 1, 0, 2, 1, 0, 1, 0, 1]
-		print(self.cal_makespan(pop, alloc_pop))
+		pop = [5, 4, 1, 0, 9, 3, 6, 7, 8, 2, 10]
+		alloc_pop = [0, 2, 1, 1, 0, 1, 0, 1, 0, 1, 2]
+		print(self.show_result(pop, alloc_pop))
 		# self.show_result()
   
 	def run(self):
@@ -708,14 +708,14 @@ class GASolver():
 		bind_end_time = 0
 
 		print("\n")
-		print(f"Best fit: \n-----\t", self.Tbest)
-		print(f"Best OHT sequence: \n-----\t", self.pop_best[:-1])
-		print(f"Best choice of agent: \n-----\t", self.alloc_best[:-1])
-		print(self.pop_fit_list)
+		# print(f"Best fit: \n-----\t", tbest)
+		print(f"Best OHT sequence: \n-----\t", pop)
+		print(f"Best choice of agent: \n-----\t", alloc_pop)
+		# print(self.pop_fit_list)
   
-		if self.Tbest >= self.PUN_val:
-			print("No valid solution!")
-			return
+		# if self.tbest >= self.PUN_val:
+		# 	print("No valid solution!")
+		# 	return
 
 		# for oht_id in self.seq_best[:-1]: ## not showing END node
       
