@@ -875,11 +875,15 @@ class GASolver():
 			
 			prefix_time = float(end_time - process_time)
 			for tb in self.oht_list[oht_id].flat():
+				if tb.To == "AGENT":
+					pos = AGENT[alloc_pop[oht.id]]
+				else:
+					pos = tb.To
 				path_dict[ag_id].append(dict(
 					TaskId = oht.id,
 					Name = tb.name,
 					Start = prefix_time,
-					Position = tb.To,
+					Position = pos,
 					time = tb.time
 				))
 				prefix_time += tb.time

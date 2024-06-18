@@ -31,11 +31,10 @@ class TaskType(Enum):
 	MANUAL = 0
 	HRC = 1
 	ROBOT = 2
-	
 
 #%% GASolver
 class GAJobSolver():
-	def __init__(self, id, job_list, oht_list, pop_size=260, num_iter=200, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
+	def __init__(self, id, job_list, oht_list, pop_size=160, num_iter=100, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   
@@ -84,7 +83,7 @@ class GAJobSolver():
 			self.replacement(offspring, rk_offspring, alloc_offspring)
 			self.progress_bar(it)
 		print("\n")
-		self.show_result()
+		self.show_result(self.pop_best, self.alloc_best)
 		return self.Tbest
 
 	def job_scheduling(self, oht_seq:list, ag_id_pair:tuple):	
@@ -429,13 +428,13 @@ class GAJobSolver():
 		
 		## Update local best
 		self.Tbest_local = self.pop_fit_list[0]
-		seq_best_local = self.pop_list[0]
+		pop_best_local = self.pop_list[0]
 		alloc_best_local = self.alloc_pop_list[0]
 
 		## Update global best
 		if self.Tbest_local < self.Tbest:
 			self.Tbest = self.Tbest_local
-			self.seq_best = seq_best_local
+			self.pop_best = pop_best_local
 			self.alloc_best = alloc_best_local
    
 	def progress_bar(self, n):
@@ -560,7 +559,7 @@ class GAJobSolver():
 					j += 1
 		return pun
    
-	def show_result(self):
+	def show_result(self, pop, alloc_pop):
      
 		agent_time = [0 for _ in range(self.num_agent)]
   
@@ -568,15 +567,13 @@ class GAJobSolver():
 		path_dict = [[] for _ in range(3)] 
 
 		print("\n")
-		print(f"Best fit: \n-----\t", self.Tbest)
-		print(f"Best OHT sequence: \n-----\t", self.seq_best[:-1])
-		print(f"Best choice of agent: \n-----\t", [tt.name for tt in self.alloc_best])
-		print(self.pop_fit_list)
+		print(f"Best OHT sequence: \n-----\t", pop[:-1])
+		print(f"Best choice of task type: \n-----\t", [a.value for a in alloc_pop[:-1]])
   
 		agent_time = [0 for _ in range(2)] # 0: human; 1: robot
 
 		## Record end time of each OHT
-		for job_id in self.seq_best:
+		for job_id in self.pop_best:
 			task_type:TaskType = self.alloc_best[job_id]
 			process_time = self.job_time[job_id][task_type.value]
 			ag_id, bind_ag_id = self.job_oht_alloc[job_id][task_type.value]
@@ -607,11 +604,15 @@ class GAJobSolver():
 			prefix_time = float(end_time - process_time)
 			for oht in self.job_list[job_id].flat():
 				for tb in oht.flat():
+					if tb.To == "AGENT":
+						pos = AGENT[ag_id]
+					else:
+						pos = tb.To
 					path_dict[ag_id].append(dict(
 						TaskId = oht.id,
 						Name = tb.name,
 						Start = prefix_time,
-						Position = tb.To,
+						Position = pos,
 						time = tb.time
 					))
 				prefix_time += tb.time
