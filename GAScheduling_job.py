@@ -66,6 +66,8 @@ class GAJobSolver():
   
 		self.job_time = [[-1, -1, -1] for _ in range(self.num_job)]
 		self.job_oht_alloc = [[(-1, -1), (-1, -1), (-1, -1)] for _ in range(self.num_job)]
+		## 每個task在不同執行方式下，機器人最終會移動到的位置
+		self.job_bot_to = [() for _ in range(self.num_job)]
   
 		self.PUN_val = 1000000
 	
@@ -89,7 +91,7 @@ class GAJobSolver():
 		return
 
 	def cal_job_time(self):
-
+     
 		for job_id, job in enumerate(self.job_list):
 			oht_seq = [oht.id for oht in job.oht_list]
 			oht_seq = self.relation_repairment(oht_seq)
@@ -121,10 +123,12 @@ class GAJobSolver():
 				oht_end_time = [0] * self.num_oht
 				bind_is_scheduled = False
 				bind_end_time = 0
-				for oht_id in oht_seq:	
-					
+
+				cur_pos = ["LH", "RH", "BOT"]
+    
+				for oht_id in oht_seq:
 					oht:OHT = self.oht_list[oht_id]
-					ag_pos = AGENT[ag_id]
+					ag_pos = cur_pos[ag_id]
 					process_time = int(oht.get_oht_time(ag_pos, ag_id))
 					remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
 
@@ -156,29 +160,35 @@ class GAJobSolver():
 
 							bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
 							end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
+       
+							oht.bind.renew_agent_pos(cur_pos, bind_ag_id)
 					
 					## HRC for simple task is not allowed
 					elif task_type == TaskType.HRC:
 						bind_end_time = self.PUN_val
-						end_time = self.PUN_val					
+						end_time = self.PUN_val
 	
 					## Normal OHT with previous OHT
 					elif oht.prev:
-							job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-							start_time = max(ag_time[ag_id], job_time)
-							end_time = start_time + process_time
+						job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+						start_time = max(ag_time[ag_id], job_time)
+						end_time = start_time + process_time
 					else:
 						start_time = ag_time[ag_id]
 						end_time = start_time + process_time
 
 					ag_time[ag_id] = end_time
 					oht_end_time[oht_id] = end_time
+					oht.renew_agent_pos(cur_pos, ag_id)
 
 					self.job_time[job_id][task_type.value] = end_time
 					self.job_oht_alloc[job_id][task_type.value] = ag_id_pair
+     
+				self.job_bot_to[task_type.value] = cur_pos[2]
 
 		print(self.job_time)
 		print(self.job_oht_alloc)
+		print(self.job_bot_to)
  
 	def init_pop(self) -> None:
 		self.Tbest = 999999999

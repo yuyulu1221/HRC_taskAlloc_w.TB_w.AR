@@ -20,9 +20,13 @@ tb_abbr = {
 
 AGENT = ["LH", "RH", "BOT"]
 
+class Timestamp:
+	def __init__(self, time, pos):
+		self.time:int = time
+		self.pos:str = pos
 
 #%% 動素
-class Therblig(object):
+class Therblig:
     def __init__(self, Name:str=None, From:str=None, To:str=None, Type:str=None):
         if tb_abbr.get(Name) == None:
             raise ValueError("This type of therblig is not exist")
@@ -61,11 +65,11 @@ class Therblig(object):
 
             ## LH and RH: Read MTM table
             if self.From == "AGENT":
-                dist = np.linalg.norm(dh.POS[self.To] - dh.POS[ag_pos])
+                dist = dh.cal_dist(dh.POS[self.To], dh.POS[ag_pos])
             elif self.To == "AGENT":
-                dist = np.linalg.norm(dh.POS[ag_pos] - dh.POS[self.From])
+                dist = dh.cal_dist(dh.POS[ag_pos], dh.POS[self.From])
             else:
-                dist = np.linalg.norm(dh.POS[self.To] - dh.POS[self.From])
+                dist = dh.cal_dist(dh.POS[self.To], dh.POS[self.From])
             
             if dist <= 30:
                 dist = ceil(dist / 2) * 2
@@ -78,7 +82,7 @@ class Therblig(object):
         
         else:
             self.time = dh.MTM.at[self.name, AGENT[ag_id]]
-            return dh.MTM.at[self.name, AGENT[ag_id]]
+            return int(self.time)
         
     def is_moving_tb(self):
         return self.name in ["R", "M"]
@@ -111,10 +115,11 @@ class OHT:
         self.next:list = []
         self.prev:list = []
         self.bind:OHT = None
-        self.bind_time = 0
-        self.end_time = 0
+        self.bind_time:int = 0
+        self.end_time:int = 0
         self.To: str
-        self.type = "P&P"
+        self.repr_pos:str = self.tb_list[0].To if len(self.tb_list) else ""
+        self.type:str = "P&P"
         for tb in self.tb_list:
             if tb.name == "A":
                 self.type = "A"
@@ -141,6 +146,7 @@ class OHT:
     def get_oht_time(self, ag_pos, ag_id):
         # print("##### get oht time #####")
         oht_t = 0
+        ## Won't go back to origin point when agent is BOT
         if ag_id == 2:
             for tb in self.tb_list[:-1]:
                 oht_t += tb.get_tb_time(ag_pos, ag_id)
@@ -180,21 +186,12 @@ class OHT:
     def renew_agent_pos(self, ag_pos_d, ag_id):
         if ag_id != 2:
             return
-        ## find the last movable therblig and change
+        # ## find the last movable therblig and change
         for tb in self.tb_list[-2::-1]:
             if tb.name in ['R', 'M']:
                 # print(f"------------ ag_pos_d[{ag_id}] = {tb.To}")
                 ag_pos_d[ag_id] = tb.To
                 break
-                
-        ## LH and RH may go back to origin position
-        # else:
-        #     for tb in self.tb_list[::-1]: # why reverse
-        #         if tb.name in ['R', 'M']:
-        #             if tb.To == "AGENT":
-        #                 tb.To = tmp
-        #             ag_pos_d[ag_id] = tb.To
-        #             break
         
             
 class JOB:
