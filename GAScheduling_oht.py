@@ -12,7 +12,7 @@ import dataHandler as dh
 
 #%% read OHT relation
 def read_OHT_relation(oht_list, id):
-	ohtr_df = pd.read_csv(f"./data/oht_relation_{id}.csv", index_col=0)
+	ohtr_df = pd.read_csv(f"./data/{id}_oht_relation.csv", index_col=0)
 	# print(ohtr_df)
  
 	for row_id in range(ohtr_df.shape[0]):
@@ -33,13 +33,13 @@ class Agent(Enum):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=260, num_iter=200, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
+	def __init__(self, id, oht_list, pop_size=160, num_iter=100, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   
 		# Get OHT relation
 		self.oht_list = read_OHT_relation(oht_list, id)
-		self.num_oht = len(oht_list)  
+		self.num_oht = len(oht_list) 
   
 		self.alloc_random_key = [[0.5, 0.5, 0.5] for _ in range(self.num_oht)]
 		# self.alloc_res = [0 for _ in range(self.num_oht)]
@@ -69,7 +69,7 @@ class GASolver():
 		alloc_pop = [0, 2, 1, 1, 0, 1, 0, 1, 0, 1, 2]
 		print(self.show_result(pop, alloc_pop))
 		# self.show_result()
-  
+ 
 	def run(self):
 		self.init_pop()
 		for it in range(self.num_iter):
@@ -95,7 +95,7 @@ class GASolver():
 			self.rk_pop_list.append(rk_pop)
 			self.alloc_pop_list.append([self.decide_agent(rk) for rk in rk_pop])
 			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i]))
-	
+ 
 	def decide_agent(self, key) -> int:
 		"""
   		Decide agent by random key
@@ -701,7 +701,7 @@ class GASolver():
 		ag_pos = ["LH", "RH", "BOT"]
   
 		gantt_dict = []
-		path_dict = [[] for _ in range(3)] 
+		order_list = [[] for _ in range(3)] 
   
 		oht_end_time = [0 for _ in range(self.num_oht)]
 		bind_is_scheduled = False
@@ -866,6 +866,8 @@ class GASolver():
    
 			start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
 			end_time_delta = str(timedelta(seconds = end_time))
+   
+			## Data for Gantt chart
 			gantt_dict.append(dict(
 				Agent = f'{AGENT[ag_id]}', 
 				Start = f'2024-06-17 {(str(start_time_delta))}', 
@@ -873,24 +875,30 @@ class GASolver():
 				Resource =f'OHT{oht_id}({self.oht_list[oht_id].type})')
             	)
 			
-			prefix_time = float(end_time - process_time)
-			for tb in self.oht_list[oht_id].flat():
-				if tb.To == "AGENT":
-					pos = AGENT[alloc_pop[oht.id]]
-				else:
-					pos = tb.To
-				path_dict[ag_id].append(dict(
-					TaskId = oht.id,
-					Name = tb.name,
-					Start = prefix_time,
-					Position = pos,
-					time = tb.time
-				))
-				prefix_time += tb.time
+			## Data for AR system
+			# prefix_time = float(end_time - process_time)
+			# for tb in self.oht_list[oht_id].flat():
+			# 	if tb.To == "AGENT":
+			# 		pos = AGENT[alloc_pop[oht.id]]
+			# 	else:
+			# 		pos = tb.To
+     
+			# 	path_dict[ag_id].append(dict(
+			# 		TaskId = oht.id,
+			# 		Name = tb.name,
+			# 		Start = prefix_time,
+			# 		Position = pos,
+			# 		time = tb.time[ag_id]
+			# 	))
+			# 	prefix_time += tb.time[ag_id]
+			
+			order_list[ag_id].append(
+       			dict(Order = oht.id)
+          	)
 
-		for a, pathd in enumerate(path_dict):
-			path_df = pd.DataFrame(pathd)
-			path_df.to_csv(f"./data/oht_result_{self.procedure_id}_{AGENT[a]}.csv" ,index=False)
+		for a, ord in enumerate(order_list):
+			order_df = pd.DataFrame(ord)
+			order_df.to_csv(f"./data/{self.procedure_id}_OHT_result_{AGENT[a]}.csv" ,index=False)
   
 		## Draw gantt chart
 		gantt_df = pd.DataFrame(gantt_dict)

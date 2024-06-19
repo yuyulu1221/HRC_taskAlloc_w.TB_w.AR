@@ -14,7 +14,7 @@ import dataHandler as dh
 
 #%% read OHT relation
 def read_OHT_relation(oht_list, id):
-	ohtr_df = pd.read_csv(f"./data/oht_relation_{id}.csv", index_col=0)
+	ohtr_df = pd.read_csv(f"./data/{id}_oht_relation.csv", index_col=0)
  
 	for row_id in range(ohtr_df.shape[0]):
 		for col_id in range(ohtr_df.shape[1]):
@@ -564,7 +564,7 @@ class GAJobSolver():
 		agent_time = [0 for _ in range(self.num_agent)]
   
 		gantt_dict = []
-		path_dict = [[] for _ in range(3)] 
+		order_list = [[] for _ in range(3)] 
 
 		print("\n")
 		print(f"Best OHT sequence: \n-----\t", pop[:-1])
@@ -603,23 +603,13 @@ class GAJobSolver():
 			
 			prefix_time = float(end_time - process_time)
 			for oht in self.job_list[job_id].flat():
-				for tb in oht.flat():
-					if tb.To == "AGENT":
-						pos = AGENT[ag_id]
-					else:
-						pos = tb.To
-					path_dict[ag_id].append(dict(
-						TaskId = oht.id,
-						Name = tb.name,
-						Start = prefix_time,
-						Position = pos,
-						time = tb.time
-					))
-				prefix_time += tb.time
-   
-		for a, pathd in enumerate(path_dict):
-			path_df = pd.DataFrame(pathd)
-			path_df.to_csv(f"./data/job_result_{self.procedure_id}_{AGENT[a]}.csv" ,index=False)
+				order_list[ag_id].append(
+       				dict(Order = oht.id)
+          		)
+
+		for a, ord in enumerate(order_list):
+			order_df = pd.DataFrame(ord)
+			order_df.to_csv(f"./data/{self.procedure_id}_JOB_result_{AGENT[a]}.csv" ,index=False)
     
 		gantt_df = pd.DataFrame(gantt_dict)
 		fig = px.timeline(

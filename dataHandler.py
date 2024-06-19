@@ -11,7 +11,7 @@ class Vec3:
 
 ## read position
 def read_POS(id) -> dict:
-	pos_df = pd.read_csv(f"./data/position_{id}.csv")
+	pos_df = pd.read_csv(f"./data/{id}_position.csv")
 	Pos = {}
 	for _, pos in pos_df.iterrows():
 		# Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
@@ -32,12 +32,13 @@ def read_MTM():
 
 ## Read Bot Time Measurement Result (Bot process time)
 def read_BOTM(id):
-	botm_df = pd.read_csv(f"./data/bot_process_time_{id}.csv", index_col=0)
+	botm_df = pd.read_csv(f"./data/{id}_bot_process_time.csv", index_col=0)
 	return botm_df
 
 POS = read_POS(id)
 MTM = read_MTM()
 BOTM = read_BOTM(id)
+
 
 # while True:
 # 	tmp = input()

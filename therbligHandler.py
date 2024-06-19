@@ -1,12 +1,9 @@
-#%% 
 from math import ceil, nan
-from os import TMP_MAX
 import numpy as np
 import pandas as pd
 import copy
 import dataHandler as dh
 
-#%% Test
 tb_abbr = {
     "R": "Reach",
     "M": "Move",
@@ -25,7 +22,6 @@ class Timestamp:
 		self.time:int = time
 		self.pos:str = pos
 
-#%% 動素
 class Therblig:
     def __init__(self, Name:str=None, From:str=None, To:str=None, Type:str=None):
         if tb_abbr.get(Name) == None:
@@ -36,12 +32,55 @@ class Therblig:
         self.From = From
         self.To = To
         self.type = Type # difficulty
+        self.time = self.cal_tb_time()
         
     def __repr__(self):
         return f"#{str(self.name)}"    
     
+    def cal_tb_time(self):
+        ptime = [0, 0, 0]
+        for ag_id in range(3):
+            if self.is_moving_tb():
+                # print(AGENT[ag_id], ag_pos, self.From, self.To)
+                if ag_id == 2: # BOT
+                    if self.From == "AGENT" and self.To == "AGENT":
+                        print('Same position??')
+                    elif self.From =="AGENT":
+                        p1, p2 = sorted([AGENT[ag_id], self.To])
+                    elif self.To == "AGENT":
+                        p1, p2 = sorted([self.From, AGENT[ag_id]])
+                    else:
+                        p1, p2 = sorted([self.From, self.To])
+                        
+                    if p1 == p2:
+                        ptime[ag_id] = 0
+                    else:
+                        ptime[ag_id] = int(dh.BOTM.at[f"{p1}<->{p2}", "Time"])
+                else:
+                    ## LH and RH: Read MTM table
+                    if self.From == "AGENT":
+                        dist = dh.cal_dist(dh.POS[self.To], dh.POS[AGENT[ag_id]])
+                    elif self.To == "AGENT":
+                        dist = dh.cal_dist(dh.POS[AGENT[ag_id]], dh.POS[self.From])
+                    else:
+                        dist = dh.cal_dist(dh.POS[self.To], dh.POS[self.From])
+                    
+                    if dist <= 30:
+                        dist = ceil(dist / 2) * 2
+                    elif dist <= 80:
+                        dist = ceil(dist / 5) * 5
+                    else:
+                        dist = 80
+                    ptime[ag_id] = int(dh.MTM.at[self.name + str(dist) + self.type, AGENT[ag_id]])         
+            else:
+                ptime[ag_id] = int(dh.MTM.at[self.name, AGENT[ag_id]])
+                
+        return ptime
+    
     def get_tb_time(self, ag_pos:str, ag_id:int) -> int:
-        # print(f"MTM.loc[{self.type}, {AGENT[agent]}] * {np.lonalg.norm}")
+        return self.time[ag_id]
+        
+        ## if start position would change
         if self.is_moving_tb():
             # print(AGENT[ag_id], ag_pos, self.From, self.To)
             if ag_id == 2: # BOT
@@ -83,7 +122,7 @@ class Therblig:
         else:
             self.time = dh.MTM.at[self.name, AGENT[ag_id]]
             return int(self.time)
-        
+    
     def is_moving_tb(self):
         return self.name in ["R", "M"]
 
@@ -119,31 +158,32 @@ class OHT:
         self.end_time:int = 0
         self.To: str
         self.repr_pos:str = self.tb_list[0].To if len(self.tb_list) else ""
-        self.type:str = "P&P"
-        for tb in self.tb_list:
-            if tb.name == "A":
-                self.type = "A"
-                break
-            elif tb.name == "DA":
-                self.type = "DA"
-                break
-                
+        self.type:str = self.decide_type()
+        self.time = self.cal_oht_time()
+        
         # self.is_scheduled = False
             
     def __repr__(self):
         return "(" + ", ".join(map(str, self.tb_list)) + ")"
         # return f"OHT{self.id}"
     
-    def set_id(self, id):
-        self.id = id
-    
-    def add_next(self, n):
-        self.next.append(n)
-    
-    def add_prev(self, p):
-        self.prev.append(p)
+    def decide_type(self):
+        for tb in self.tb_list:
+            if tb.name == "A":
+                return "A"
+            elif tb.name == "DA":
+                return "DA"
+        return "P&P"
+        
+    def cal_oht_time(self):
+        ptime = [0, 0, 0]
+        for ag_id in range(3):
+            for tb in self.tb_list:
+                ptime[ag_id] += tb.get_tb_time(AGENT[ag_id], ag_id)
+        return ptime
     
     def get_oht_time(self, ag_pos, ag_id):
+        return self.time[ag_id]
         # print("##### get oht time #####")
         oht_t = 0
         ## Won't go back to origin point when agent is BOT
@@ -155,6 +195,28 @@ class OHT:
                 oht_t += tb.get_tb_time(ag_pos, ag_id)
         # print("#####")
         return oht_t
+    
+    ## For AR system
+    def get_process_method(self, ag_id) -> dict:
+        data = []
+        # for tb in self.tb_list:
+        #     data.append({
+        #         'name': tb.name,
+        #         'from': tb.From,
+        #         'to': tb.To,
+        #         'time': tb.time[2]
+        #     })
+        # return {self.id: data}
+    
+        for tb in self.tb_list:
+            data.append(dict(
+                TaskId = self.id,
+                Name = tb.name,
+                From = tb.From if tb.From != 'AGENT' else AGENT[ag_id],
+                To = tb.To if tb.To != 'AGENT' else AGENT[ag_id],
+                time = tb.time[ag_id]
+            ))
+        return data
     
     def get_bind_remain_time(self, ag_pos, ag_id):
         # print("&&&&& get bind remain time &&&&&")
@@ -253,17 +315,26 @@ class TBHandler(object):
         # Use dummy node to represent "END"
         self.oht_list.append(OHT([]))
                         
-    def get_oht_time(self, oht_id, Pos):
-        self.oht_list[oht_id].get_oht_time(Pos)
+    # def get_oht_time(self, oht_id, Pos):
+    #     self.oht_list[oht_id].get_oht_time(Pos)
            
     def set_oht_id(self):
         for id, oht in enumerate(self.oht_list):
-            oht.set_id(id)
+            oht.id = id
+            
+    def write_process_method(self, ag_id):
+        pm = []
+        for oht in self.oht_list:
+            pm.extend(oht.get_process_method(ag_id))
+            
+        pm_df = pd.DataFrame(pm)
+        pm_df.to_csv(f"./data/{self.id}_process_method_{AGENT[ag_id]}.csv" ,index=False)
      
     def run(self):
         self.save_tbs()
         self.read_tbs()
         self.set_oht_id()
+        self.write_process_method(2)
         # print(self.OHT_list)
 
 
