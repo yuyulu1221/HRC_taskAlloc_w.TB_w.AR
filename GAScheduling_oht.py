@@ -26,10 +26,7 @@ def read_OHT_relation(oht_list, id):
     
 	return oht_list
 
-class Agent(Enum):
-	LH = 0
-	RH = 1
-	BOT = 2
+
 
 #%% GASolver
 class GASolver():
@@ -94,7 +91,13 @@ class GASolver():
 			rk_pop = [[np.random.normal(0.5, 0.166) for _ in range(3)] for _ in range(self.num_oht)]
 			self.rk_pop_list.append(rk_pop)
 			self.alloc_pop_list.append([self.decide_agent(rk) for rk in rk_pop])
+			for alloc_pop in self.alloc_pop_list:
+				self.apply_alloc_limit(alloc_pop) 
 			self.pop_fit_list.append(self.cal_makespan(self.pop_list[i], self.alloc_pop_list[i]))
+   
+	def apply_alloc_limit(self, alloc_pop):
+		for oht_id in dh.AL:
+			alloc_pop[oht_id] = dh.AL[oht_id]
  
 	def decide_agent(self, key) -> int:
 		"""
@@ -165,6 +168,8 @@ class GASolver():
 			# rk_offspring.append(self.random_key_autoreproduction(rk_p1))
    
 		alloc_offspring = [[self.decide_agent(rk) for rk in rk_offspring[idx]] for idx in range(len(rk_offspring))]
+		for ao in alloc_offspring:
+			self.apply_alloc_limit(ao)
 
 		return offspring, rk_offspring, alloc_offspring
   

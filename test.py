@@ -45,3 +45,17 @@ class TTT(Enum):
 for i in TTT:
 	print(i)
 	print(i.value)
+ 
+combin_list = []
+def find_combination(cnt:int, total:int, combin:list):
+	if cnt >= total:
+		combin_list.append(combin)
+		return
+	for i in range(3):
+		tmp = combin.copy()
+		tmp.append(i)
+		find_combination(cnt+1, total, tmp)
+
+find_combination(0, 1, [])
+
+print(combin_list)

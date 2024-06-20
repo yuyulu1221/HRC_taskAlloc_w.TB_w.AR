@@ -4,7 +4,7 @@ from therbligHandler import *
 import optuna
 import dataHandler
 
-procedure_id = "final4"
+procedure_id = "final"
 num_tbs = 7
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)

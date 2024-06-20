@@ -1,4 +1,5 @@
 #%% importing required modules
+from gettext import find
 from math import inf
 from enum import Enum
 from multiprocessing import process
@@ -64,9 +65,7 @@ class GAJobSolver():
 		self.alloc_pop_list = []
   
 		self.job_time = [[-1, -1, -1] for _ in range(self.num_job)]
-		self.job_oht_alloc = [[(-1, -1), (-1, -1), (-1, -1)] for _ in range(self.num_job)]
-		## 每個task在不同執行方式下，機器人最終會移動到的位置
-		self.job_bot_to = [() for _ in range(self.num_job)]
+		self.job_oht_alloc = [[[], [], []] for _ in range(self.num_job)]
   
 		self.PUN_val = 1000000
 	
@@ -86,38 +85,75 @@ class GAJobSolver():
 		self.show_result(self.pop_best, self.alloc_best)
 		return self.Tbest
 
-	def job_scheduling(self, oht_seq:list, ag_id_pair:tuple):	
-		return
+	def apply_alloc_limit(self, alloc_pop):
+		pass
 
 	def cal_job_time(self):
-     
 		for job_id, job in enumerate(self.job_list):
 			oht_seq = [oht.id for oht in job.oht_list]
 			oht_seq = self.relation_repairment(oht_seq)
+			al_id = {}
+			for loc_oht_id, oht_id in enumerate(oht_seq):
+				if oht_id in dh.AL:
+					al_id[loc_oht_id] = dh.AL[oht_id]
+			num_oht = len(oht_seq)
+
+			ag_alloc_list = []
+			def find_combination(cnt:int, total:int, alloc:list):
+				if cnt >= total:
+					ag_alloc_list.append(alloc)
+					return
+				if cnt in al_id:
+					tmp = alloc.copy()
+					tmp.append(al_id[cnt])
+					find_combination(cnt+1, total, tmp)
+					return
+				for i in range(self.num_agent):
+					tmp = alloc.copy()
+					tmp.append(i)
+					find_combination(cnt+1, total, tmp)
+     
+			find_combination(0, num_oht, [])
+   
+			loc_alloc_list = [[], [], []]
+			for alloc in ag_alloc_list:
+				if 2 not in alloc:
+					loc_alloc_list[TaskType.MANUAL.value].append(alloc.copy())
+				elif 0 in alloc or 1 in alloc:
+					loc_alloc_list[TaskType.HRC.value].append(alloc.copy())
+				else:
+					loc_alloc_list[TaskType.ROBOT.value].append(alloc.copy())
+     
+			# print("alloc list")
+			# print(loc_alloc_list)
    
 			for task_type in TaskType:
-				if task_type == TaskType.MANUAL: 
-					tmp = [(0, 1), (1, 0)]
-					i = np.random.randint(0, len(tmp))
-					ag_id_pair = tmp[i]
+       
+				if len(loc_alloc_list[task_type.value]) == 0:
+					loc_ag_alloc = [-1 for _ in range(num_oht)]
+  
+				elif task_type == TaskType.MANUAL: 
+					rand_int = np.random.randint(0, len(loc_alloc_list[task_type.value]))
+					loc_ag_alloc = loc_alloc_list[task_type.value][rand_int].copy()
 					
 				elif task_type == TaskType.HRC:
-					tmp = [(0, 2), (1, 2), (2, 0), (2, 1)]
-					i = np.random.randint(0, len(tmp))
-					ag_id_pair = tmp[i]
+					rand_int = np.random.randint(0, len(loc_alloc_list[task_type.value]))
+					loc_ag_alloc = loc_alloc_list[task_type.value][rand_int].copy()
 	
 				elif task_type == TaskType.ROBOT:
-					ag_id_pair = (2, 2)
+					loc_ag_alloc = loc_alloc_list[task_type.value][-1].copy()
      
 				else:
 					print("Invalid task type")
+     
+				# print(f"{job_id}_{task_type}: {loc_ag_alloc}")
 
-				min_job_time = 9999999
-				min_job_oht_alloc = (-1, -1)
-				max_job_time = 0
-				max_job_oht_alloc = (-1, -1)
+				# min_job_time = 9999999
+				# # min_job_oht_alloc = (-1, -1)
+				# max_job_time = 0
+				# # max_job_oht_alloc = (-1, -1)
     
-				ag_id, bind_ag_id = ag_id_pair
+				# ag_id, bind_ag_id = loc_ag_alloc
 				ag_time = [0] * self.num_agent
 				oht_end_time = [0] * self.num_oht
 				bind_is_scheduled = False
@@ -125,8 +161,15 @@ class GAJobSolver():
 
 				cur_pos = ["LH", "RH", "BOT"]
     
-				for oht_id in oht_seq:
+				for loc_oht_id, oht_id in enumerate(oht_seq):
+        
 					oht:OHT = self.oht_list[oht_id]
+					ag_id = loc_ag_alloc[loc_oht_id] 
+
+					if ag_id == -1:
+						bind_end_time = self.PUN_val
+						end_time = self.PUN_val
+
 					ag_pos = cur_pos[ag_id]
 					process_time = int(oht.get_oht_time(ag_pos, ag_id))
 					remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
@@ -149,6 +192,7 @@ class GAJobSolver():
 							end_time = max(ag_time[ag_id], job_time) + process_time
 							
 							## Find the end time of bind OHT
+							bind_ag_id = loc_ag_alloc[loc_oht_id+1]
 							bind_ag_pos = AGENT[bind_ag_id]
 							bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
 							bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
@@ -181,13 +225,10 @@ class GAJobSolver():
 					oht.renew_agent_pos(cur_pos, ag_id)
 
 					self.job_time[job_id][task_type.value] = end_time
-					self.job_oht_alloc[job_id][task_type.value] = ag_id_pair
-     
-				self.job_bot_to[task_type.value] = cur_pos[2]
+					self.job_oht_alloc[job_id][task_type.value] = loc_ag_alloc
 
 		print(self.job_time)
 		print(self.job_oht_alloc)
-		print(self.job_bot_to)
  
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
@@ -576,7 +617,7 @@ class GAJobSolver():
 		for job_id in self.pop_best:
 			task_type:TaskType = self.alloc_best[job_id]
 			process_time = self.job_time[job_id][task_type.value]
-			ag_id, bind_ag_id = self.job_oht_alloc[job_id][task_type.value]
+			# ag_id, bind_ag_id = self.job_oht_alloc[job_id][task_type.value]
 
 			if task_type == TaskType.MANUAL:
 				agent_time[0] += process_time
@@ -601,8 +642,8 @@ class GAJobSolver():
 				Resource =f'JOB{job_id}({self.job_list[job_id].type})')
             	)
 			
-			prefix_time = float(end_time - process_time)
-			for oht in self.job_list[job_id].flat():
+			for i, oht in enumerate(self.job_list[job_id].flat()):
+				ag_id = self.job_oht_alloc[job_id][task_type.value][i]
 				order_list[ag_id].append(
        				dict(Order = oht.id)
           		)

@@ -287,7 +287,7 @@ class TBHandler(object):
     def save_tbs(self):
         for i in range(1, self.num_tbs+1):
             tmp = RawTherbligs(self.Pos)
-            tbs_df = pd.read_excel(f"data/data_{self.id}.xlsx", sheet_name=f"Therbligs{i}")
+            tbs_df = pd.read_excel(f"data/{self.id}_data.xlsx", sheet_name=f"Therbligs{i}")
             tmp.read(tbs_df)
             self.tbs_list.append(tmp)
         

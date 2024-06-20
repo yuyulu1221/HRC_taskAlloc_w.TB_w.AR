@@ -1,13 +1,20 @@
 import pandas as pd
 import numpy as np
+from enum import Enum
 
-id = "final4"
+id = "final"
 
 class Vec3:
 	def __init__(self, x, y, z):
 		self.x = x
 		self.y = y
 		self.z = z
+  
+class Agent(Enum):
+	NONE = -1
+	LH = 0
+	RH = 1
+	BOT = 2
 
 ## read position
 def read_POS(id) -> dict:
@@ -35,9 +42,18 @@ def read_BOTM(id):
 	botm_df = pd.read_csv(f"./data/{id}_bot_process_time.csv", index_col=0)
 	return botm_df
 
+def read_AL(id):
+	al_df = pd.read_csv(f"./data/{id}_alloc_limit.csv")
+	Al = {}
+	for _, al in al_df.iterrows():
+		# Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
+		Al[int(al["OHT"])] = int(al["OnlyFor"])
+	return Al
+
 POS = read_POS(id)
 MTM = read_MTM()
 BOTM = read_BOTM(id)
+AL = read_AL(id)
 
 
 # while True:
