@@ -1,4 +1,5 @@
 #%% importing required modules
+from collections import defaultdict
 from gettext import find
 from math import inf
 from enum import Enum
@@ -9,6 +10,8 @@ import numpy as np
 import copy
 import plotly.express as px
 from datetime import timedelta
+
+from traitlets import default
 
 from therbligHandler import *
 import dataHandler as dh
@@ -89,146 +92,145 @@ class GAJobSolver():
 		pass
 
 	def cal_job_time(self):
+     
 		for job_id, job in enumerate(self.job_list):
-			oht_seq = [oht.id for oht in job.oht_list]
+			local_alloc_list = [[] for _ in TaskType]
+			oht_seq = [oht.id for oht in job.flat()]
 			oht_seq = self.relation_repairment(oht_seq)
-			al_id = {}
-			for loc_oht_id, oht_id in enumerate(oht_seq):
-				if oht_id in dh.AL:
-					al_id[loc_oht_id] = dh.AL[oht_id]
+			print("oht_seq: ", oht_seq)
+			# al_id = {}
+			# for loc_oht_id, oht_id in enumerate(oht_seq):
+			# 	if oht_id in dh.AL:
+			# 		al_id[loc_oht_id] = dh.AL[oht_id]
 			num_oht = len(oht_seq)
 
-			ag_alloc_list = []
+			## List all agent alloc combination of n task
+			alloc_combin = []
 			def find_combination(cnt:int, total:int, alloc:list):
 				if cnt >= total:
-					ag_alloc_list.append(alloc)
-					return
-				if cnt in al_id:
-					tmp = alloc.copy()
-					tmp.append(al_id[cnt])
-					find_combination(cnt+1, total, tmp)
+					alloc_combin.append(alloc)
 					return
 				for i in range(self.num_agent):
 					tmp = alloc.copy()
 					tmp.append(i)
 					find_combination(cnt+1, total, tmp)
-     
 			find_combination(0, num_oht, [])
    
-			loc_alloc_list = [[], [], []]
-			for alloc in ag_alloc_list:
+			## Classify allocate combination by task type
+			for alloc in alloc_combin:
 				if 2 not in alloc:
-					loc_alloc_list[TaskType.MANUAL.value].append(alloc.copy())
+					local_alloc_list[TaskType.MANUAL.value].append(tuple(alloc))
+
 				elif 0 in alloc or 1 in alloc:
-					loc_alloc_list[TaskType.HRC.value].append(alloc.copy())
+					local_alloc_list[TaskType.HRC.value].append(tuple(alloc))
+
 				else:
-					loc_alloc_list[TaskType.ROBOT.value].append(alloc.copy())
-     
-			# print("alloc list")
-			# print(loc_alloc_list)
+					local_alloc_list[TaskType.ROBOT.value].append(tuple(alloc))			
    
 			for task_type in TaskType:
-       
-				if len(loc_alloc_list[task_type.value]) == 0:
-					loc_ag_alloc = [-1 for _ in range(num_oht)]
-  
-				elif task_type == TaskType.MANUAL: 
-					rand_int = np.random.randint(0, len(loc_alloc_list[task_type.value]))
-					loc_ag_alloc = loc_alloc_list[task_type.value][rand_int].copy()
+				min_job_time = 9999999
+				min_job_oht_alloc = ()
+    
+				for ag_alloc in local_alloc_list[task_type.value]:
 					
-				elif task_type == TaskType.HRC:
-					rand_int = np.random.randint(0, len(loc_alloc_list[task_type.value]))
-					loc_ag_alloc = loc_alloc_list[task_type.value][rand_int].copy()
-	
-				elif task_type == TaskType.ROBOT:
-					loc_ag_alloc = loc_alloc_list[task_type.value][-1].copy()
-     
-				else:
-					print("Invalid task type")
-     
-				# print(f"{job_id}_{task_type}: {loc_ag_alloc}")
+					print("ag_alloc:", ag_alloc)
+					ag_time = [0] * self.num_agent
+					oht_end_time = [0] * self.num_oht
+					bind_is_scheduled = False
+					bind_end_time = 0
 
-				# min_job_time = 9999999
-				# # min_job_oht_alloc = (-1, -1)
-				# max_job_time = 0
-				# # max_job_oht_alloc = (-1, -1)
-    
-				# ag_id, bind_ag_id = loc_ag_alloc
-				ag_time = [0] * self.num_agent
-				oht_end_time = [0] * self.num_oht
-				bind_is_scheduled = False
-				bind_end_time = 0
+					cur_pos = ["LH", "RH", "BOT"]
 
-				cur_pos = ["LH", "RH", "BOT"]
-    
-				for loc_oht_id, oht_id in enumerate(oht_seq):
-        
-					oht:OHT = self.oht_list[oht_id]
-					ag_id = loc_ag_alloc[loc_oht_id] 
-
-					if ag_id == -1:
-						bind_end_time = self.PUN_val
-						end_time = self.PUN_val
-
-					ag_pos = cur_pos[ag_id]
-					process_time = int(oht.get_oht_time(ag_pos, ag_id))
-					remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
-
-					if bind_is_scheduled:
-						end_time = bind_end_time
-						bind_is_scheduled = False
-		
-					elif oht.bind != None:
-						bind_is_scheduled = True
-	
-						if task_type == TaskType.ROBOT:
-							bind_end_time = self.PUN_val
+					for local_oht_id, oht_id in enumerate(oht_seq):				
+						oht:OHT = self.oht_list[oht_id]
+      
+						if len(ag_alloc) == 0:
+							print("##### ag_alloc == 0")
 							end_time = self.PUN_val
+							break
+						
+						ag_id = ag_alloc[local_oht_id] 
+						if oht_id in dh.AL:
+							if ag_id != dh.AL[oht_id]:
+								print("##### Agent limit")
+								end_time = self.PUN_val
+								break
 
+						# if local_ag_id == -1:
+						# 	bind_end_time = self.PUN_val
+						# 	end_time = self.PUN_val
+						# 	continue
+						
+						ag_pos = cur_pos[ag_id]
+						process_time = int(oht.get_oht_time(ag_pos, ag_id))
+						remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
+
+						if bind_is_scheduled:
+							end_time = bind_end_time
+							bind_is_scheduled = False
+							bind_end_time = 0
+			
+						elif oht.bind != None:		
+							bind_is_scheduled = True
+							## ROBOT for binding task is not allowed
+							if task_type == TaskType.ROBOT:
+								bind_end_time = self.PUN_val
+								end_time = self.PUN_val
+							else:
+								job_time = 0
+								if oht.prev:
+									job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+								end_time = max(ag_time[ag_id], job_time) + process_time
+								
+								## Find the end time of bind OHT
+								bind_ag_id = ag_alloc[local_oht_id+1]
+
+								if ag_id == bind_ag_id:
+									print("##### same agent")
+									bind_end_time = self.PUN_val
+									end_time = self.PUN_val
+								else:
+									bind_ag_pos = AGENT[bind_ag_id]
+									bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
+									bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
+									bind_job_time = 0
+									if oht.bind.prev:
+										bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
+									bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
+
+									bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
+									end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
+						
+						# ## HRC for simple task is not allowed
+						# elif task_type == TaskType.HRC:
+						# 	print("##### HRC for simple task")
+						# 	end_time = self.PUN_val
+		
+						## Normal OHT with previous OHT
+						elif oht.prev:
+							job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+							start_time = max(ag_time[ag_id], job_time)
+							end_time = start_time + process_time
 						else:
-							job_time = 0
-							if oht.prev:
-								job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-							end_time = max(ag_time[ag_id], job_time) + process_time
-							
-							## Find the end time of bind OHT
-							bind_ag_id = loc_ag_alloc[loc_oht_id+1]
-							bind_ag_pos = AGENT[bind_ag_id]
-							bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
-							bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
-							bind_job_time = 0
-							if oht.bind.prev:
-								bind_job_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
-							bind_end_time = max(ag_time[bind_ag_id], bind_job_time) + bind_process_time
+							start_time = ag_time[ag_id]
+							end_time = start_time + process_time
 
-							bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
-							end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
-       
-							oht.bind.renew_agent_pos(cur_pos, bind_ag_id)
-					
-					## HRC for simple task is not allowed
-					elif task_type == TaskType.HRC:
-						bind_end_time = self.PUN_val
-						end_time = self.PUN_val
-	
-					## Normal OHT with previous OHT
-					elif oht.prev:
-						job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-						start_time = max(ag_time[ag_id], job_time)
-						end_time = start_time + process_time
-					else:
-						start_time = ag_time[ag_id]
-						end_time = start_time + process_time
+						ag_time[ag_id] = end_time
+						oht_end_time[oht_id] = end_time
+						oht.renew_agent_pos(cur_pos, ag_id)
+      
+					print("end_time", end_time)
 
-					ag_time[ag_id] = end_time
-					oht_end_time[oht_id] = end_time
-					oht.renew_agent_pos(cur_pos, ag_id)
+					if end_time < min_job_time:
+						min_job_time = end_time
+						min_job_oht_alloc = ag_alloc
 
-					self.job_time[job_id][task_type.value] = end_time
-					self.job_oht_alloc[job_id][task_type.value] = loc_ag_alloc
-
+				self.job_time[job_id][task_type.value] = min_job_time
+				self.job_oht_alloc[job_id][task_type.value] = min_job_oht_alloc
+		input()
 		print(self.job_time)
 		print(self.job_oht_alloc)
+
  
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
@@ -521,84 +523,84 @@ class GAJobSolver():
 		makespan = max(agent_time)
 		return makespan
 
-	def interference_PUN(self, timestamps):
-     	## Handle interference problem
-		i, j, k = 0, 0, 0
-		lh_now, rh_now, bot_now = dh.POS['LH'], dh.POS['RH'], dh.POS['BOT']
-		pun = 0
+	# def interference_PUN(self, timestamps):
+    #  	## Handle interference problem
+	# 	i, j, k = 0, 0, 0
+	# 	lh_now, rh_now, bot_now = dh.POS['LH'], dh.POS['RH'], dh.POS['BOT']
+	# 	pun = 0
   
-		## Compare the x-coord of LH and RH; compare the z_coord of robot and hands
-		while i < len(timestamps[0]) or j < len(timestamps[1]) or k < len(timestamps[2]):
-			## Check interference
-			if lh_now[0] > rh_now[0] \
-   			or lh_now[2] > bot_now[2] \
-      		or rh_now[2] > bot_now[2]:
-				pun = self.PUN_val
-				break
-			## Renew agent position
-			if i >= len(timestamps[0]):
-				if j >= len(timestamps[1]):
-					bot_now = timestamps[2][k][1]
-					k += 1
-				elif k >= len(timestamps[2]):
-					rh_now = timestamps[1][j][1]
-					j += 1
-				else:
-					if timestamps[1][j][0] < timestamps[2][k][0]:
-						rh_now = timestamps[1][j][1]
-						j += 1 
-					elif timestamps[1][j][0] > timestamps[2][k][0]:
-						bot_now = timestamps[2][k][1]
-						k += 1
-					else:
-						rh_now = timestamps[1][j][1]
-						j += 1 
-						bot_now = timestamps[2][k][1]
-						k += 1
-			elif j >= len(timestamps[1]):
-				if k >= len(timestamps[2]):	
-					lh_now = timestamps[0][i][1]
-					i += 1
-				else:
-					if timestamps[0][i][0] < timestamps[2][k][0]:
-						lh_now = timestamps[0][i][1]
-						i += 1 
-					elif timestamps[0][i][0] > timestamps[2][k][0]:
-						bot_now = timestamps[2][k][1]
-						k += 1 
-					else:
-						lh_now = timestamps[0][i][1]
-						i += 1 
-						bot_now = timestamps[2][k][1]
-						k += 1 
-			elif k >= len(timestamps[2]):
-				if timestamps[0][i][0] < timestamps[1][j][0]:
-					lh_now = timestamps[0][i][1]
-					i += 1 
-				elif timestamps[0][i][0] < timestamps[1][j][0]:
-					rh_now = timestamps[1][j][1]
-					j += 1 
-				else:
-					lh_now = timestamps[0][i][1]
-					i += 1 
-					rh_now = timestamps[1][j][1]
-					j += 1 
-			else:
-				if timestamps[0][i][0] < min(timestamps[1][j][0], timestamps[2][k][0]):
-					lh_now = timestamps[0][i][1]
-					i += 1
-				elif timestamps[1][j][0] < min(timestamps[0][i][0], timestamps[2][k][0]):
-					rh_now = timestamps[1][j][1]
-					j += 1
-				elif timestamps[2][k][0] < min(timestamps[0][i][0], timestamps[1][j][0]):
-					bot_now = timestamps[2][k][1]
-					k += 1
-				else:
-					lh_now = timestamps[0][i][1]
-					i += 1
-					rh_now = timestamps[1][j][1]
-					j += 1
-		return pun
+	# 	## Compare the x-coord of LH and RH; compare the z_coord of robot and hands
+	# 	while i < len(timestamps[0]) or j < len(timestamps[1]) or k < len(timestamps[2]):
+	# 		## Check interference
+	# 		if lh_now[0] > rh_now[0] \
+   	# 		or lh_now[2] > bot_now[2] \
+    #   		or rh_now[2] > bot_now[2]:
+	# 			pun = self.PUN_val
+	# 			break
+	# 		## Renew agent position
+	# 		if i >= len(timestamps[0]):
+	# 			if j >= len(timestamps[1]):
+	# 				bot_now = timestamps[2][k][1]
+	# 				k += 1
+	# 			elif k >= len(timestamps[2]):
+	# 				rh_now = timestamps[1][j][1]
+	# 				j += 1
+	# 			else:
+	# 				if timestamps[1][j][0] < timestamps[2][k][0]:
+	# 					rh_now = timestamps[1][j][1]
+	# 					j += 1 
+	# 				elif timestamps[1][j][0] > timestamps[2][k][0]:
+	# 					bot_now = timestamps[2][k][1]
+	# 					k += 1
+	# 				else:
+	# 					rh_now = timestamps[1][j][1]
+	# 					j += 1 
+	# 					bot_now = timestamps[2][k][1]
+	# 					k += 1
+	# 		elif j >= len(timestamps[1]):
+	# 			if k >= len(timestamps[2]):	
+	# 				lh_now = timestamps[0][i][1]
+	# 				i += 1
+	# 			else:
+	# 				if timestamps[0][i][0] < timestamps[2][k][0]:
+	# 					lh_now = timestamps[0][i][1]
+	# 					i += 1 
+	# 				elif timestamps[0][i][0] > timestamps[2][k][0]:
+	# 					bot_now = timestamps[2][k][1]
+	# 					k += 1 
+	# 				else:
+	# 					lh_now = timestamps[0][i][1]
+	# 					i += 1 
+	# 					bot_now = timestamps[2][k][1]
+	# 					k += 1 
+	# 		elif k >= len(timestamps[2]):
+	# 			if timestamps[0][i][0] < timestamps[1][j][0]:
+	# 				lh_now = timestamps[0][i][1]
+	# 				i += 1 
+	# 			elif timestamps[0][i][0] < timestamps[1][j][0]:
+	# 				rh_now = timestamps[1][j][1]
+	# 				j += 1 
+	# 			else:
+	# 				lh_now = timestamps[0][i][1]
+	# 				i += 1 
+	# 				rh_now = timestamps[1][j][1]
+	# 				j += 1 
+	# 		else:
+	# 			if timestamps[0][i][0] < min(timestamps[1][j][0], timestamps[2][k][0]):
+	# 				lh_now = timestamps[0][i][1]
+	# 				i += 1
+	# 			elif timestamps[1][j][0] < min(timestamps[0][i][0], timestamps[2][k][0]):
+	# 				rh_now = timestamps[1][j][1]
+	# 				j += 1
+	# 			elif timestamps[2][k][0] < min(timestamps[0][i][0], timestamps[1][j][0]):
+	# 				bot_now = timestamps[2][k][1]
+	# 				k += 1
+	# 			else:
+	# 				lh_now = timestamps[0][i][1]
+	# 				i += 1
+	# 				rh_now = timestamps[1][j][1]
+	# 				j += 1
+	# 	return pun
    
 	def show_result(self, pop, alloc_pop):
      
@@ -608,8 +610,8 @@ class GAJobSolver():
 		order_list = [[] for _ in range(3)] 
 
 		print("\n")
-		print(f"Best OHT sequence: \n-----\t", pop[:-1])
-		print(f"Best choice of task type: \n-----\t", [a.value for a in alloc_pop[:-1]])
+		print(f"Best OHT sequence: \n-----\t", pop)
+		print(f"Best choice of task type: \n-----\t", [a.value for a in alloc_pop])
   
 		agent_time = [0 for _ in range(2)] # 0: human; 1: robot
 

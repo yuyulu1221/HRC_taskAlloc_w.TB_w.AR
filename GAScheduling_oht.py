@@ -35,7 +35,7 @@ class GASolver():
 		self.procedure_id = id
   
 		# Get OHT relation
-		self.oht_list = read_OHT_relation(oht_list, id)
+		self._oht_list = read_OHT_relation(oht_list, id)
 		self.num_oht = len(oht_list) 
   
 		self.alloc_random_key = [[0.5, 0.5, 0.5] for _ in range(self.num_oht)]
