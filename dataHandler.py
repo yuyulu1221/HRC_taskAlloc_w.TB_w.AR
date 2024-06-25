@@ -10,8 +10,7 @@ class Vec3:
 		self.y = y
 		self.z = z
   
-class Agent(Enum):
-	NONE = -1
+class AgentType(Enum):
 	LH = 0
 	RH = 1
 	BOT = 2

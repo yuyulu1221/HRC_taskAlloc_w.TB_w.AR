@@ -71,7 +71,7 @@ def job_optuna_run():
 
 
 while True:
-	cmd = input()
+	cmd = input("Scheduling Type: ")
 	if cmd == 'oht':
 		oht_simple_run()
 	elif cmd == 'job':

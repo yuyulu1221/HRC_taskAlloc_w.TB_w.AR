@@ -4,7 +4,6 @@ from gettext import find
 from math import inf
 from enum import Enum
 from multiprocessing import process
-from sqlite3 import TimestampFromTicks
 import pandas as pd
 import numpy as np
 import copy
@@ -38,7 +37,7 @@ class TaskType(Enum):
 
 #%% GASolver
 class GAJobSolver():
-	def __init__(self, id, job_list, oht_list, pop_size=160, num_iter=100, crossover_rate=0.8, mutation_rate=0.01, rk_mutation_rate=0.01, rk_iter_change_rate=0.6):
+	def __init__(self, id, job_list, oht_list, pop_size=240, num_iter=200, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
 		
 		self.procedure_id = id
   
@@ -97,11 +96,6 @@ class GAJobSolver():
 			local_alloc_list = [[] for _ in TaskType]
 			oht_seq = [oht.id for oht in job.flat()]
 			oht_seq = self.relation_repairment(oht_seq)
-			print("oht_seq: ", oht_seq)
-			# al_id = {}
-			# for loc_oht_id, oht_id in enumerate(oht_seq):
-			# 	if oht_id in dh.AL:
-			# 		al_id[loc_oht_id] = dh.AL[oht_id]
 			num_oht = len(oht_seq)
 
 			## List all agent alloc combination of n task
@@ -133,7 +127,7 @@ class GAJobSolver():
     
 				for ag_alloc in local_alloc_list[task_type.value]:
 					
-					print("ag_alloc:", ag_alloc)
+					# print("ag_alloc:", ag_alloc)
 					ag_time = [0] * self.num_agent
 					oht_end_time = [0] * self.num_oht
 					bind_is_scheduled = False
@@ -145,14 +139,14 @@ class GAJobSolver():
 						oht:OHT = self.oht_list[oht_id]
       
 						if len(ag_alloc) == 0:
-							print("##### ag_alloc == 0")
+							# print("##### ag_alloc == 0")
 							end_time = self.PUN_val
 							break
 						
 						ag_id = ag_alloc[local_oht_id] 
 						if oht_id in dh.AL:
 							if ag_id != dh.AL[oht_id]:
-								print("##### Agent limit")
+								# print("##### Agent limit")
 								end_time = self.PUN_val
 								break
 
@@ -171,6 +165,7 @@ class GAJobSolver():
 							bind_end_time = 0
 			
 						elif oht.bind != None:		
+          			
 							bind_is_scheduled = True
 							## ROBOT for binding task is not allowed
 							if task_type == TaskType.ROBOT:
@@ -186,7 +181,7 @@ class GAJobSolver():
 								bind_ag_id = ag_alloc[local_oht_id+1]
 
 								if ag_id == bind_ag_id:
-									print("##### same agent")
+									# print("##### same agent")
 									bind_end_time = self.PUN_val
 									end_time = self.PUN_val
 								else:
@@ -209,6 +204,7 @@ class GAJobSolver():
 						## Normal OHT with previous OHT
 						elif oht.prev:
 							job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
+							# job_time = max(oht_prev.next_connect_time[ag_alloc[oht_prev.id]] + process_time - oht.prev_connect_time for oht_prev in oht.prev)
 							start_time = max(ag_time[ag_id], job_time)
 							end_time = start_time + process_time
 						else:
@@ -219,7 +215,7 @@ class GAJobSolver():
 						oht_end_time[oht_id] = end_time
 						oht.renew_agent_pos(cur_pos, ag_id)
       
-					print("end_time", end_time)
+					# print("end_time", end_time)
 
 					if end_time < min_job_time:
 						min_job_time = end_time
@@ -227,9 +223,9 @@ class GAJobSolver():
 
 				self.job_time[job_id][task_type.value] = min_job_time
 				self.job_oht_alloc[job_id][task_type.value] = min_job_oht_alloc
-		input()
-		print(self.job_time)
-		print(self.job_oht_alloc)
+    
+		# print(self.job_time)
+		# print(self.job_oht_alloc)
 
  
 	def init_pop(self) -> None:
@@ -522,85 +518,6 @@ class GAJobSolver():
 
 		makespan = max(agent_time)
 		return makespan
-
-	# def interference_PUN(self, timestamps):
-    #  	## Handle interference problem
-	# 	i, j, k = 0, 0, 0
-	# 	lh_now, rh_now, bot_now = dh.POS['LH'], dh.POS['RH'], dh.POS['BOT']
-	# 	pun = 0
-  
-	# 	## Compare the x-coord of LH and RH; compare the z_coord of robot and hands
-	# 	while i < len(timestamps[0]) or j < len(timestamps[1]) or k < len(timestamps[2]):
-	# 		## Check interference
-	# 		if lh_now[0] > rh_now[0] \
-   	# 		or lh_now[2] > bot_now[2] \
-    #   		or rh_now[2] > bot_now[2]:
-	# 			pun = self.PUN_val
-	# 			break
-	# 		## Renew agent position
-	# 		if i >= len(timestamps[0]):
-	# 			if j >= len(timestamps[1]):
-	# 				bot_now = timestamps[2][k][1]
-	# 				k += 1
-	# 			elif k >= len(timestamps[2]):
-	# 				rh_now = timestamps[1][j][1]
-	# 				j += 1
-	# 			else:
-	# 				if timestamps[1][j][0] < timestamps[2][k][0]:
-	# 					rh_now = timestamps[1][j][1]
-	# 					j += 1 
-	# 				elif timestamps[1][j][0] > timestamps[2][k][0]:
-	# 					bot_now = timestamps[2][k][1]
-	# 					k += 1
-	# 				else:
-	# 					rh_now = timestamps[1][j][1]
-	# 					j += 1 
-	# 					bot_now = timestamps[2][k][1]
-	# 					k += 1
-	# 		elif j >= len(timestamps[1]):
-	# 			if k >= len(timestamps[2]):	
-	# 				lh_now = timestamps[0][i][1]
-	# 				i += 1
-	# 			else:
-	# 				if timestamps[0][i][0] < timestamps[2][k][0]:
-	# 					lh_now = timestamps[0][i][1]
-	# 					i += 1 
-	# 				elif timestamps[0][i][0] > timestamps[2][k][0]:
-	# 					bot_now = timestamps[2][k][1]
-	# 					k += 1 
-	# 				else:
-	# 					lh_now = timestamps[0][i][1]
-	# 					i += 1 
-	# 					bot_now = timestamps[2][k][1]
-	# 					k += 1 
-	# 		elif k >= len(timestamps[2]):
-	# 			if timestamps[0][i][0] < timestamps[1][j][0]:
-	# 				lh_now = timestamps[0][i][1]
-	# 				i += 1 
-	# 			elif timestamps[0][i][0] < timestamps[1][j][0]:
-	# 				rh_now = timestamps[1][j][1]
-	# 				j += 1 
-	# 			else:
-	# 				lh_now = timestamps[0][i][1]
-	# 				i += 1 
-	# 				rh_now = timestamps[1][j][1]
-	# 				j += 1 
-	# 		else:
-	# 			if timestamps[0][i][0] < min(timestamps[1][j][0], timestamps[2][k][0]):
-	# 				lh_now = timestamps[0][i][1]
-	# 				i += 1
-	# 			elif timestamps[1][j][0] < min(timestamps[0][i][0], timestamps[2][k][0]):
-	# 				rh_now = timestamps[1][j][1]
-	# 				j += 1
-	# 			elif timestamps[2][k][0] < min(timestamps[0][i][0], timestamps[1][j][0]):
-	# 				bot_now = timestamps[2][k][1]
-	# 				k += 1
-	# 			else:
-	# 				lh_now = timestamps[0][i][1]
-	# 				i += 1
-	# 				rh_now = timestamps[1][j][1]
-	# 				j += 1
-	# 	return pun
    
 	def show_result(self, pop, alloc_pop):
      
@@ -639,8 +556,8 @@ class GAJobSolver():
 			end_time_delta = str(timedelta(seconds = end_time))
 			gantt_dict.append(dict(
 				TaskType = f'{task_type.name}', 
-				Start = f'2024-06-11 {(str(start_time_delta))}', 
-				Finish = f'2024-06-11 {(str(end_time_delta))}',
+				Start = f'2024-06-23 {(str(start_time_delta))}', 
+				Finish = f'2024-06-23 {(str(end_time_delta))}',
 				Resource =f'JOB{job_id}({self.job_list[job_id].type})')
             	)
 			

@@ -1,7 +1,7 @@
+from enum import Enum
 from math import ceil, nan
 import numpy as np
 import pandas as pd
-import copy
 import dataHandler as dh
 
 tb_abbr = {
@@ -25,7 +25,7 @@ class Timestamp:
 class Therblig:
     def __init__(self, Name:str=None, From:str=None, To:str=None, Type:str=None):
         if tb_abbr.get(Name) == None:
-            raise ValueError("This type of therblig is not exist")
+            raise ValueError(f"This type of therblig is not exist: {Name}")
         self.name = Name
         self.start: float
         self.end: float
@@ -71,6 +71,7 @@ class Therblig:
                         dist = ceil(dist / 5) * 5
                     else:
                         dist = 80
+
                     ptime[ag_id] = int(dh.MTM.at[self.name + str(dist) + self.type, AGENT[ag_id]])         
             else:
                 ptime[ag_id] = int(dh.MTM.at[self.name, AGENT[ag_id]])
@@ -78,6 +79,23 @@ class Therblig:
         return ptime
     
     def get_tb_time(self, ag_pos:str, ag_id:int) -> int:
+        if self.From == 'AGENT':
+            if ag_id == 2:
+                p1, p2 = sorted([ag_pos, self.To])
+                if p1 == p2:
+                    return 0
+                else:
+                    return int(dh.BOTM.at[f"{p1}<->{p2}", "Time"])
+            else:    
+                dist = dh.cal_dist(dh.POS[self.To], dh.POS[AGENT[ag_id]])
+                if dist <= 30:
+                        dist = ceil(dist / 2) * 2
+                elif dist <= 80:
+                    dist = ceil(dist / 5) * 5
+                else:
+                    dist = 80
+                return int(dh.MTM.at[self.name + str(dist) + self.type, AGENT[ag_id]])
+            
         return self.time[ag_id]
         
         ## if start position would change
@@ -128,22 +146,22 @@ class Therblig:
 
 
 #%% 動素序列
-class RawTherbligs(object):
-    def __init__(self, Pos):
-        self.list = []
-        self.Pos = Pos
-    def __repr__(self):
-        return ", ".join(map(str, self.list))
+# class RawTherbligs(object):
+#     def __init__(self, Pos):
+#         self.list = []
+#         self.Pos = Pos
+#     def __repr__(self):
+#         return ", ".join(map(str, self.list))
         
-    def read(self, df: pd.DataFrame):
-        for _, row in df.iterrows():
-            therblig = Therblig(
-                Name = row["Name"], 
-                From = row["From"], 
-                To = row["To"] if not pd.isna(row["To"]) else None, 
-                Type = row["Type"],
-            )
-            self.list.append(copy.copy(therblig))
+#     def read(self, df: pd.DataFrame):
+#         for _, row in df.iterrows():
+#             therblig = Therblig(
+#                 Name = row["Name"], 
+#                 From = row["From"], 
+#                 To = row["To"] if not pd.isna(row["To"]) else None, 
+#                 Type = row["Type"],
+#             )
+#             self.list.append(copy.copy(therblig))
 
 
 #%% 單手任務
@@ -160,6 +178,8 @@ class OHT:
         self.repr_pos:str = self.tb_list[0].To if len(self.tb_list) else ""
         self.type:str = self.decide_type()
         self.time = self.cal_oht_time()
+        self.prev_connect_time, self.next_connect_time = self.get_connect_time()
+        
         
         # self.is_scheduled = False
             
@@ -167,7 +187,7 @@ class OHT:
         return "(" + ", ".join(map(str, self.tb_list)) + ")"
         # return f"OHT{self.id}"
     
-    def decide_type(self):
+    def decide_type(self) -> str:
         for tb in self.tb_list:
             if tb.name == "A":
                 return "A"
@@ -181,6 +201,29 @@ class OHT:
             for tb in self.tb_list:
                 ptime[ag_id] += tb.get_tb_time(AGENT[ag_id], ag_id)
         return ptime
+    
+    def get_connect_time(self):
+        prev_connect_time = [0, 0, 0]
+        next_connect_time = [0, 0, 0]
+        for ag_id in range(3):
+            cur_total = 0
+            for i, tb in enumerate(self.tb_list):
+                cur_total += tb.get_tb_time(AGENT[ag_id], ag_id)
+                if tb.name == 'G':
+                    prev_connect_time[ag_id] = cur_total
+            cur_total = 0
+            for i, tb in enumerate(self.tb_list[::-1]):
+                if tb.name == 'A' and self.tb_list[i+1].name == 'RL':
+                    next_connect_time[ag_id] = cur_total
+                    break
+                if tb.name == 'RL'and self.tb_list[i-1].name != 'A':
+                    next_connect_time[ag_id] = cur_total
+                    break
+                cur_total += tb.get_tb_time(AGENT[ag_id], ag_id)
+        # print(prev_connect_time)
+        # print(next_connect_time)
+        return prev_connect_time, next_connect_time
+                    
     
     def get_oht_time(self, ag_pos, ag_id):
         return self.time[ag_id]
@@ -236,9 +279,9 @@ class OHT:
             oht_t += tb.get_tb_time(ag_pos, ag_id)
             if tb.is_moving_tb(): 
                 if tb.To == 'AGENT':
-                    timestamps.append((oht_t, dh.POS[ag_pos]))
+                    timestamps.append(Timestamp(oht_t, ag_pos))
                 else: 
-                    timestamps.append((oht_t, dh.POS[tb.To]))
+                    timestamps.append(Timestamp(oht_t, tb.To))
         # print("!!!!!")
         return timestamps
     
@@ -251,7 +294,6 @@ class OHT:
         # ## find the last movable therblig and change
         for tb in self.tb_list[-2::-1]:
             if tb.name in ['R', 'M']:
-                # print(f"------------ ag_pos_d[{ag_id}] = {tb.To}")
                 ag_pos_d[ag_id] = tb.To
                 break
         
@@ -275,48 +317,36 @@ class JOB:
 class TBHandler(object):
     def __init__(self, num_tbs, id):
         self.Pos = {}
-        self.tbsl:RawTherbligs
-        self.tbsr:RawTherbligs
         self.num_tbs = num_tbs
         self.id = id
-        self.tbs_list = []
         self.job_list = []
         self.oht_list = []
     
     ## Save tbs by list
     def save_tbs(self):
         for i in range(1, self.num_tbs+1):
-            tmp = RawTherbligs(self.Pos)
             tbs_df = pd.read_excel(f"data/{self.id}_data.xlsx", sheet_name=f"Therbligs{i}")
-            tmp.read(tbs_df)
-            self.tbs_list.append(tmp)
-        
-    ## Convert tbs to oht    
-    def read_tbs(self):
-        for tbs in self.tbs_list:
-            if not isinstance(tbs, RawTherbligs):
-                continue
-            job = []
             tmp = []
-            for tb in tbs.list:
-                tmp.append(tb)
-                if tb.name == "RL":
-                    if tb.To[-3:] != "TOP":
-                        tmp.append(Therblig("R", tb.To, tb.To + "_TOP", "B"))
-                        tmp.append(Therblig("R", tb.To + "_TOP", "AGENT", "B"))
-                    else:
-                        tmp.append(Therblig("R", tb.To, "AGENT", "B"))
+            job = []
+            for _, row in tbs_df.iterrows():
+                if row['Name'] == 'END':
                     oht = OHT(tmp.copy())
                     self.oht_list.append(oht)
                     job.append(oht)
-                    tmp.clear()
+                    tmp.clear() 
+                    continue
+                
+                therblig = Therblig(
+                    Name = row["Name"], 
+                    From = row["From"] if not pd.isna(row["To"]) else None, 
+                    To = row["To"] if not pd.isna(row["To"]) else None, 
+                    Type = row["Type"] if not pd.isna(row["To"]) else None, 
+                )
+                tmp.append(therblig)
             self.job_list.append(JOB(job))
             
-        # Use dummy node to represent "END"
-        self.oht_list.append(OHT([]))
-                        
-    # def get_oht_time(self, oht_id, Pos):
-    #     self.oht_list[oht_id].get_oht_time(Pos)
+        ## Use dummy node to represent "END" OHT   
+        self.oht_list.append(OHT([]))                   
            
     def set_oht_id(self):
         for id, oht in enumerate(self.oht_list):
@@ -332,12 +362,8 @@ class TBHandler(object):
      
     def run(self):
         self.save_tbs()
-        self.read_tbs()
         self.set_oht_id()
         self.write_process_method(2)
-        # print(self.OHT_list)
-
-
 
 #%% Main
 # myTBHandler = TBHandler()
