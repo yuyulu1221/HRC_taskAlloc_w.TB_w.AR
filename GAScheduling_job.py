@@ -1,16 +1,14 @@
 #%% importing required modules
-from collections import defaultdict
-from gettext import find
+# from collections import defaultdict
 from math import inf
 from enum import Enum
-from multiprocessing import process
+# from multiprocessing import process
+import statistics as stat
 import pandas as pd
 import numpy as np
 import copy
 import plotly.express as px
 from datetime import timedelta
-
-from traitlets import default
 
 from therbligHandler import *
 import dataHandler as dh
@@ -37,9 +35,10 @@ class TaskType(Enum):
 
 #%% GASolver
 class GAJobSolver():
-	def __init__(self, id, job_list, oht_list, pop_size=240, num_iter=200, crossover_rate=0.8, mutation_rate=0.03, rk_mutation_rate=0.08, rk_iter_change_rate=0.6):
+	def __init__(self, id, job_list, oht_list, pop_size=200, num_iter=200, crossover_rate=0.64, mutation_rate=0.01):
 		
 		self.procedure_id = id
+		self.num_repeat = 5
   
 		# Get OHT relation
 		self.job_list = job_list
@@ -57,8 +56,8 @@ class GAJobSolver():
 		self.mutation_rate = mutation_rate
 		mutation_selection_rate = 0.2
 		self.num_mutation_pos = round(self.num_job * mutation_selection_rate)
-		self.rk_mutation_rate = rk_mutation_rate
-		self.rk_iter_change_rate = rk_iter_change_rate
+		self.rk_mutation_rate = mutation_rate
+		self.rk_iter_change_rate = 0.6
 		
 		self.pop_list = []
 		self.pop_fit_list = []
@@ -75,6 +74,8 @@ class GAJobSolver():
 		self.cal_job_time()
  
 	def run(self):
+		# best_list = []
+		# for _ in range(self.num_repeat):
 		self.cal_job_time()
 		self.init_pop()
 		for it in range(self.num_iter):
@@ -86,6 +87,10 @@ class GAJobSolver():
 		print("\n")
 		self.show_result(self.pop_best, self.alloc_best)
 		return self.Tbest
+		# best_list.append(self.Tbest)
+		# print("Best: ", min(best_list))
+		# print("Ave.: ", stat.mean(best_list))
+		# print("Std.: ", stat.stdev(best_list))
 
 	def apply_alloc_limit(self, alloc_pop):
 		pass
@@ -252,15 +257,15 @@ class GAJobSolver():
 		"""
 		if key[0] == key[1] and key[0] == key[2]:
 			# return np.random.randint(0, 3)
-			return np.random.choice(TaskType.MANUAL, TaskType.HRC, TaskType.ROBOT)
+			return np.random.choice((TaskType.MANUAL, TaskType.HRC, TaskType.ROBOT))
 		elif key[0] == key[1] and key[0] > key[2]:
-			return np.random.choice(TaskType.MANUAL, TaskType.HRC)
+			return np.random.choice((TaskType.MANUAL, TaskType.HRC))
 			# return np.random.randint(0, 2)
 		elif key[1] == key[2] and key[1] > key[0]:
-			return np.random.choice(TaskType.HRC, TaskType.ROBOT)
+			return np.random.choice((TaskType.HRC, TaskType.ROBOT))
 			# return np.random.randint(1, 3)
 		elif key[0] == key[2] and key[2] > key[1]:
-			return np.random.choice(TaskType.MANUAL, TaskType.ROBOT)
+			return np.random.choice((TaskType.MANUAL, TaskType.ROBOT))
 			# return np.random.choice([0, 2])
 		else:
 			tmp_max = np.argmax(key)
@@ -364,8 +369,9 @@ class GAJobSolver():
 
 		child = (np.array(parent0) + np.array(parent1)) / 2
 
-		if self.rk_mutation_rate >= np.random.rand():
-			child = [c + np.random.normal() for c in child]
+		for rk in child:
+			if self.rk_mutation_rate >= np.random.rand():
+				np.random.shuffle(rk)
 
 		return child
 
@@ -587,7 +593,7 @@ class GAJobSolver():
 			text='Resource'
    		)
 		fig.update_yaxes(autorange="reversed")
-		fig.show()
+		# fig.show()
   
 # solver = GASolver([1,0,2])
 # solver.run()

@@ -24,8 +24,8 @@ def oht_simple_run():
 def oht_optuna_run():
 	def GA_objective(trial, id, oht_list):
 		param_grid = {
-			'pop_size': trial.suggest_int("pop_size", 200, 700, step=50),
-			'num_iter': trial.suggest_int("num_iter", 200, 700, step=50),
+			'pop_size': trial.suggest_int("pop_size", 100, 500, step=50),
+			'num_iter': trial.suggest_int("num_iter", 100, 500, step=50),
 			'crossover_rate': trial.suggest_float("crossover_rate", 0.6, 1),
 			'mutation_rate': trial.suggest_float("mutation_rate", 0.01, 0.025),
 			'rk_mutation_rate': trial.suggest_float("rk_mutation_rate", 0.01, 0.025),
@@ -36,7 +36,7 @@ def oht_optuna_run():
 		return Tbest
 
 	study = optuna.create_study(directions=["minimize"])
-	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.oht_list), n_trials=80, n_jobs=2)
+	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.oht_list), n_trials=160, n_jobs=4)
 
 	print('Trial Number: ', study.best_trial.number)
 	print('Parameters: ', study.best_trial.params)
@@ -50,19 +50,17 @@ def job_simple_run():
 def job_optuna_run():
 	def GA_objective(trial, id, job_list, oht_list):
 		param_grid = {
-			'pop_size': trial.suggest_int("pop_size", 200, 700, step=50),
-			'num_iter': trial.suggest_int("num_iter", 200, 700, step=50),
+			'pop_size': trial.suggest_int("pop_size", 100, 500, step=50),
+			'num_iter': trial.suggest_int("num_iter", 100, 500, step=50),
 			'crossover_rate': trial.suggest_float("crossover_rate", 0.6, 1),
 			'mutation_rate': trial.suggest_float("mutation_rate", 0.01, 0.025),
-			'rk_mutation_rate': trial.suggest_float("rk_mutation_rate", 0.01, 0.025),
-			'rk_iter_change_rate': trial.suggest_float("rk_iter_change_rate", 0.4, 0.8)
 		}
 		solver = GAJobSolver(id, job_list, oht_list, **param_grid)
 		Tbest = solver.run()
 		return Tbest
 
 	study = optuna.create_study(directions=["minimize"])
-	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.job_list, tbh.oht_list), n_trials=80, n_jobs=2)
+	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.job_list, tbh.oht_list), n_trials=160, n_jobs=4)
 
 	print('Trial Number: ', study.best_trial.number)
 	print('Parameters: ', study.best_trial.params)
