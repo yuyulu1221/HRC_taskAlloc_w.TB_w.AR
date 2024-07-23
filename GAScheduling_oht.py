@@ -63,9 +63,9 @@ class GASolver():
 		self.PUN_val = 100000
   
 	def test(self):
-		pop = [5, 4, 1, 0, 9, 3, 6, 7, 8, 2, 10]
-		alloc_pop = [0, 2, 1, 1, 0, 1, 0, 1, 0, 1, 2]
-		print(self.show_result(pop, alloc_pop))
+		pop = [9, 10, 7, 4, 3, 0, 1, 8, 12, 2, 6, 13, 11, 5]
+		alloc_pop = [0, 1, 0, 2, 1, 2, 1, 0, 0, 0, 1, 1, 1, 0]
+		print(self.cal_makespan(pop, alloc_pop, show_result=True))
 		# self.show_result()
  
 	def run(self):
@@ -503,27 +503,6 @@ class GASolver():
 			elif oht.bind != None:
 				## revise alloc in binded task
 				bind_ag_id = alloc_pop[oht.bind.id]
-				# if ag_id == 0 and bind_ag_id == 1 and dh.POS[oht.repr_pos].x > dh.POS[oht.bind.repr_pos].x:
-				# 	# alloc_pop[oht.id], alloc_pop[oht.bind.id] = alloc_pop[oht.bind.id], alloc_pop[oht.id]
-				# 	ag_id, bind_ag_id = bind_ag_id, ag_id
-				# elif ag_id == 1 and bind_ag_id == 0 and dh.POS[oht.repr_pos].x < dh.POS[oht.bind.repr_pos].x:
-				# 	# alloc_pop[oht.id], alloc_pop[oht.bind.id] = alloc_pop[oht.bind.id], alloc_pop[oht.id]
-				# 	ag_id, bind_ag_id = bind_ag_id, ag_id
-				# elif ag_id == 0 and bind_ag_id == 2 and dh.POS[oht.repr_pos].z > dh.POS[oht.bind.repr_pos].z:
-				# 	# alloc_pop[oht.id], alloc_pop[oht.bind.id] = alloc_pop[oht.bind.id], alloc_pop[oht.id]
-				# 	ag_id, bind_ag_id = bind_ag_id, ag_id
-				# elif ag_id == 2 and bind_ag_id == 0 and dh.POS[oht.repr_pos].z < dh.POS[oht.bind.repr_pos].z:
-				# 	# alloc_pop[oht.id], alloc_pop[oht.bind.id] = alloc_pop[oht.bind.id], alloc_pop[oht.id]
-				# 	ag_id, bind_ag_id = bind_ag_id, ag_id
-				# elif ag_id == 1 and bind_ag_id == 2 and dh.POS[oht.repr_pos].z > dh.POS[oht.bind.repr_pos].z:
-				# 	# alloc_pop[oht.id], alloc_pop[oht.bind.id] = alloc_pop[oht.bind.id], alloc_pop[oht.id]
-				# 	ag_id, bind_ag_id = bind_ag_id, ag_id
-				# elif ag_id == 2 and bind_ag_id == 1 and dh.POS[oht.repr_pos].z < dh.POS[oht.bind.repr_pos].z:
-				# 	# alloc_pop[oht.id], alloc_pop[oht.bind.id] = alloc_pop[oht.bind.id], alloc_pop[oht.id]
-				# 	ag_id, bind_ag_id = bind_ag_id, ag_id
-				# else:
-				# 	pass
-    
 				## Find the end time of current OHT
 				job_time = 0
 				if oht.prev:
