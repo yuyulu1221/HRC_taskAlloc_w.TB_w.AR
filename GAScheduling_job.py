@@ -72,6 +72,11 @@ class GAJobSolver():
 	
 	def test(self):
 		self.cal_job_time()
+		pop = [1, 4, 5, 0, 6, 3, 2]
+		alloc_pop = [0, 1, 2, 0, 0, 0, 0]
+		alloc_pop = [TaskType(ap) for ap in alloc_pop]
+		print(alloc_pop)
+		print(self.cal_makespan(pop, alloc_pop, show_result=True))
  
 	def run(self):
 		# best_list = []
@@ -85,12 +90,8 @@ class GAJobSolver():
 			self.replacement(offspring, rk_offspring, alloc_offspring)
 			self.progress_bar(it)
 		print("\n")
-		self.show_result(self.pop_best, self.alloc_best)
+		self.cal_makespan(self.pop_best, self.alloc_best, show_result=True)
 		return self.Tbest
-		# best_list.append(self.Tbest)
-		# print("Best: ", min(best_list))
-		# print("Ave.: ", stat.mean(best_list))
-		# print("Std.: ", stat.stdev(best_list))
 
 	def apply_alloc_limit(self, alloc_pop):
 		pass
@@ -131,8 +132,6 @@ class GAJobSolver():
 				min_job_oht_alloc = ()
     
 				for ag_alloc in local_alloc_list[task_type.value]:
-					
-					# print("ag_alloc:", ag_alloc)
 					ag_time = [0] * self.num_agent
 					oht_end_time = [0] * self.num_oht
 					bind_is_scheduled = False
@@ -144,21 +143,14 @@ class GAJobSolver():
 						oht:OHT = self.oht_list[oht_id]
       
 						if len(ag_alloc) == 0:
-							# print("##### ag_alloc == 0")
 							end_time = self.PUN_val
 							break
 						
 						ag_id = ag_alloc[local_oht_id] 
 						if oht_id in dh.AL:
 							if ag_id != dh.AL[oht_id]:
-								# print("##### Agent limit")
 								end_time = self.PUN_val
 								break
-
-						# if local_ag_id == -1:
-						# 	bind_end_time = self.PUN_val
-						# 	end_time = self.PUN_val
-						# 	continue
 						
 						ag_pos = cur_pos[ag_id]
 						process_time = int(oht.get_oht_time(ag_pos, ag_id))
@@ -186,7 +178,6 @@ class GAJobSolver():
 								bind_ag_id = ag_alloc[local_oht_id+1]
 
 								if ag_id == bind_ag_id:
-									# print("##### same agent")
 									bind_end_time = self.PUN_val
 									end_time = self.PUN_val
 								else:
@@ -200,16 +191,10 @@ class GAJobSolver():
 
 									bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
 									end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
-						
-						# ## HRC for simple task is not allowed
-						# elif task_type == TaskType.HRC:
-						# 	print("##### HRC for simple task")
-						# 	end_time = self.PUN_val
 		
 						## Normal OHT with previous OHT
 						elif oht.prev:
 							job_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-							# job_time = max(oht_prev.next_connect_time[ag_alloc[oht_prev.id]] + process_time - oht.prev_connect_time for oht_prev in oht.prev)
 							start_time = max(ag_time[ag_id], job_time)
 							end_time = start_time + process_time
 						else:
@@ -219,8 +204,6 @@ class GAJobSolver():
 						ag_time[ag_id] = end_time
 						oht_end_time[oht_id] = end_time
 						oht.renew_agent_pos(cur_pos, ag_id)
-      
-					# print("end_time", end_time)
 
 					if end_time < min_job_time:
 						min_job_time = end_time
@@ -229,8 +212,8 @@ class GAJobSolver():
 				self.job_time[job_id][task_type.value] = min_job_time
 				self.job_oht_alloc[job_id][task_type.value] = min_job_oht_alloc
     
-		# print(self.job_time)
-		# print(self.job_oht_alloc)
+		print(self.job_time)
+		print(self.job_oht_alloc)
 
  
 	def init_pop(self) -> None:
@@ -256,17 +239,17 @@ class GAJobSolver():
 			int: Agent id
 		"""
 		if key[0] == key[1] and key[0] == key[2]:
-			# return np.random.randint(0, 3)
 			return np.random.choice((TaskType.MANUAL, TaskType.HRC, TaskType.ROBOT))
+
 		elif key[0] == key[1] and key[0] > key[2]:
 			return np.random.choice((TaskType.MANUAL, TaskType.HRC))
-			# return np.random.randint(0, 2)
+
 		elif key[1] == key[2] and key[1] > key[0]:
 			return np.random.choice((TaskType.HRC, TaskType.ROBOT))
-			# return np.random.randint(1, 3)
+
 		elif key[0] == key[2] and key[2] > key[1]:
 			return np.random.choice((TaskType.MANUAL, TaskType.ROBOT))
-			# return np.random.choice([0, 2])
+
 		else:
 			tmp_max = np.argmax(key)
 			if tmp_max == 0:
@@ -319,10 +302,6 @@ class GAJobSolver():
    
 			offspring.append(self.mask_crossover(p0, p1))
 			rk_offspring.append(self.random_key_crossover(rk_p0, rk_p1))
-			# offspring.append(p0)
-			# rk_offspring.append(self.random_key_autoreproduction(rk_p0))
-			# offspring.append(p1)
-			# rk_offspring.append(self.random_key_autoreproduction(rk_p1))
    
 		alloc_offspring = [[self.decide_task_type(rk) for rk in rk_offspring[idx]] for idx in range(len(rk_offspring))]
 
@@ -361,7 +340,6 @@ class GAJobSolver():
 		if self.mutation_rate >= np.random.rand():
 			i, j = np.random.choice(self.num_job, 2, replace=False)
 			child[i], child[j] = child[j], child[i]
-		# child = self.relation_repairment(child)
    
 		return child
 
@@ -489,21 +467,16 @@ class GAJobSolver():
 		if n+1 == self.num_iter:
 			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {[tt.name for tt in self.alloc_best]}")
 		else:
-			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {[tt.name for tt in self.alloc_best]}", end="")
-   
-	# def check_takeover(self, pop):
-	# 	for i, id in enumerate(pop):
-	# 		oht = self.oht_list[id]
-	# 		if oht.type in ["A", "DA"]:
-	# 			if oht.next.id
-				
+			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {[tt.name for tt in self.alloc_best]}", end="")			
 
-	def cal_makespan(self, pop:list, alloc_pop:list):
+	def cal_makespan(self, pop:list, alloc_pop:list, show_result=False):
 		"""
 		Returns:
 			int: makespan calculated by scheduling
 		"""
 		agent_time = [0 for _ in range(2)] # 0: human; 1: robot
+		gantt_dict = []
+		order_list = [[] for _ in range(3)] 
 
 		## Record end time of each OHT
 		oht_end_time = [0 for _ in range(self.num_job)]
@@ -511,38 +484,6 @@ class GAJobSolver():
 			task_type:TaskType = alloc_pop[job_id]
 			job:JOB = self.job_list[job_id]
 			process_time = self.job_time[job_id][task_type.value]
-
-			if task_type == TaskType.MANUAL:
-				agent_time[0] += process_time
-
-			elif task_type == TaskType.ROBOT:
-				agent_time[1] += process_time
-    
-			else:
-				agent_time[0] += process_time
-				agent_time[1] += process_time
-
-		makespan = max(agent_time)
-		return makespan
-   
-	def show_result(self, pop, alloc_pop):
-     
-		agent_time = [0 for _ in range(self.num_agent)]
-  
-		gantt_dict = []
-		order_list = [[] for _ in range(3)] 
-
-		print("\n")
-		print(f"Best OHT sequence: \n-----\t", pop)
-		print(f"Best choice of task type: \n-----\t", [a.value for a in alloc_pop])
-  
-		agent_time = [0 for _ in range(2)] # 0: human; 1: robot
-
-		## Record end time of each OHT
-		for job_id in self.pop_best:
-			task_type:TaskType = self.alloc_best[job_id]
-			process_time = self.job_time[job_id][task_type.value]
-			# ag_id, bind_ag_id = self.job_oht_alloc[job_id][task_type.value]
 
 			if task_type == TaskType.MANUAL:
 				agent_time[0] += process_time
@@ -558,42 +499,44 @@ class GAJobSolver():
 				agent_time[0] = end_time
 				agent_time[1] = end_time
     
-			start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
-			end_time_delta = str(timedelta(seconds = end_time))
-			gantt_dict.append(dict(
-				TaskType = f'{task_type.name}', 
-				Start = f'2024-06-23 {(str(start_time_delta))}', 
-				Finish = f'2024-06-23 {(str(end_time_delta))}',
-				Resource =f'JOB{job_id}({self.job_list[job_id].type})')
-            	)
-			
-			for i, oht in enumerate(self.job_list[job_id].flat()):
-				ag_id = self.job_oht_alloc[job_id][task_type.value][i]
-				order_list[ag_id].append(
-       				dict(Order = oht.id)
-          		)
-
-		for a, ord in enumerate(order_list):
-			order_df = pd.DataFrame(ord)
-			order_df.to_csv(f"./data/{self.procedure_id}_JOB_result_{AGENT[a]}.csv" ,index=False)
-    
-		gantt_df = pd.DataFrame(gantt_dict)
-		fig = px.timeline(
-      		gantt_df,
-			x_start='Start', 
-			x_end='Finish', 
-			y='TaskType', 
-			color='Resource', 
-			title='Schedule', 
-			color_discrete_sequence=px.colors.qualitative.Plotly + px.colors.qualitative.Pastel,
-			category_orders={
-				'Agent': ['BOT', 'RH', 'LH'],
-				'Resource': [f"OHT{i}" for i in range(self.num_oht - 1)]
-			},
-			text='Resource'
-   		)
-		fig.update_yaxes(autorange="reversed")
-		# fig.show()
-  
-# solver = GASolver([1,0,2])
-# solver.run()
+			if show_result:
+				# start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
+				start_time_delta = str(timedelta(seconds = int((end_time - process_time)*0.0036))) # convert seconds to hours, minutes and seconds
+				# end_time_delta = str(timedelta(seconds = end_time))
+				end_time_delta = str(timedelta(seconds = int(end_time*0.0036)))
+				gantt_dict.append(dict(
+					TaskType = f'{task_type.name}', 
+					Start = f'2024-06-23 {(str(start_time_delta))}', 
+					Finish = f'2024-06-23 {(str(end_time_delta))}',
+					Resource =f'JOB{job_id}({self.job_list[job_id].type})')
+					)
+				
+				for i, oht in enumerate(self.job_list[job_id].flat()):
+					ag_id = self.job_oht_alloc[job_id][task_type.value][i]
+					order_list[ag_id].append(
+						dict(Order = oht.id)
+					)
+		if show_result:
+			for a, ord in enumerate(order_list):
+				order_df = pd.DataFrame(ord)
+				order_df.to_csv(f"./data/{self.procedure_id}_JOB_result_{AGENT[a]}.csv" ,index=False)
+		
+			gantt_df = pd.DataFrame(gantt_dict)
+			fig = px.timeline(
+				gantt_df,
+				x_start='Start', 
+				x_end='Finish', 
+				y='TaskType', 
+				color='Resource', 
+				title='Schedule', 
+				color_discrete_sequence=px.colors.qualitative.Plotly + px.colors.qualitative.Pastel,
+				category_orders={
+					'TaskType': ['MANUAL', 'ROBOT', 'HRC'],
+					'Resource': [f"Task{i}({self.job_list[job_id].type})" for i in range(self.num_oht - 1)]
+				},
+				text='Resource'
+			)
+			fig.update_layout(font=dict(size=36))
+			fig.show()
+		makespan = max(agent_time)
+		return makespan

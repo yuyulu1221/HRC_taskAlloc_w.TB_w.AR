@@ -13,8 +13,12 @@ tbh.run()
 print(tbh.oht_list)
 
 # test
-def test():
+def test_oht():
 	solver = GASolver(procedure_id, tbh.oht_list)
+	solver.test()
+ 
+def test_job():
+	solver = GAJobSolver(procedure_id, tbh.job_list, tbh.oht_list)
 	solver.test()
 
 def oht_simple_run():
@@ -74,8 +78,10 @@ while True:
 		oht_simple_run()
 	elif cmd == 'job':
 		job_simple_run()
-	elif cmd == 'test':
-		test()
+	elif cmd == 'testoht':
+		test_oht()
+	elif cmd == 'testjob':
+		test_job()
 	elif cmd == 'optoht':
 		oht_optuna_run()
 	elif cmd == 'optjob':
