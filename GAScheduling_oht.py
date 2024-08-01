@@ -4,6 +4,7 @@ from enum import Enum
 import pandas as pd
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 import plotly.express as px
 import matplotlib
 import matplotlib.pyplot as plt
@@ -31,7 +32,7 @@ def read_OHT_relation(oht_list, id):
 
 #%% GASolver
 class GASolver():
-	def __init__(self, id, oht_list, pop_size=400, num_iter=250, crossover_rate=0.9, mutation_rate=0.014, rk_mutation_rate=0.014, rk_iter_change_rate=0.66):
+	def __init__(self, id, oht_list, pop_size=400, num_iter=60, crossover_rate=0.9, mutation_rate=0.014, rk_mutation_rate=0.014, rk_iter_change_rate=0.66):
 		
 		self.procedure_id = id
 		self.num_repeat = 5
@@ -70,18 +71,27 @@ class GASolver():
 		# self.show_result()
  
 	def run(self):
-		best_list = []
-		# for _ in range(self.num_repeat):
 		self.init_pop()
+		best_list = []
 		for it in range(self.num_iter):
 			self.Tbest_local = 999999999
 			parent, rk_parent = self.selection()
 			offspring, rk_offspring, alloc_offspring = self.reproduction(parent, rk_parent)
 			self.replacement(offspring, rk_offspring, alloc_offspring)
+			# print(self.Tbest_local)
+			best_list.append(self.Tbest_local/10)
 			self.progress_bar(it)
 		print("\n")
 		# self.show_result(self.pop_best, self.alloc_best)
 		self.cal_makespan(self.pop_best, self.alloc_best, show_result=True)
+		
+		iterations = [it+1 for it in range(self.num_iter)]
+		plt.plot(iterations, best_list)
+		plt.title('Run Chart')
+		plt.xlabel('iterations')
+		plt.ylabel('fitness')
+		plt.grid(axis='y', linestyle='--')  # 添加網格線
+		plt.show()
 			# best_list.append(self.Tbest)
 		# print("Best: ", min(best_list))
 		# print("Ave.: ", statistics.mean(best_list))
@@ -566,8 +576,10 @@ class GASolver():
 			oht_end_time[oht_id] = end_time
    
 			if show_result:
-				start_time_delta = str(timedelta(seconds = int((end_time - process_time)*0.0036))) # convert seconds to hours, minutes and seconds
-				end_time_delta = str(timedelta(seconds = int(end_time*0.0036)))
+				start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
+				# start_time_delta = str(timedelta(seconds = int((end_time - process_time)*0.0036))) # convert seconds to hours, minutes and seconds
+				end_time_delta = str(timedelta(seconds = end_time))
+				# end_time_delta = str(timedelta(seconds = int(end_time*0.0036)))
 	
 				## Data for Gantt chart
 				gantt_dict.append(dict(
@@ -643,3 +655,4 @@ class GASolver():
 				if start_time < ts.time and dh.POS[pos].z < dh.POS[ts.pos].z:
 					start_time = ts.time
 		return start_time
+# %%

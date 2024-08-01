@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import copy
 import plotly.express as px
+import matplotlib.pyplot as plt
 from datetime import timedelta
 
 from therbligHandler import *
@@ -72,15 +73,18 @@ class GAJobSolver():
 	
 	def test(self):
 		self.cal_job_time()
+  
+		## 從這裡改測試結果
 		pop = [1, 4, 5, 0, 6, 3, 2]
 		alloc_pop = [0, 1, 2, 0, 0, 0, 0]
+		## ---
+  
 		alloc_pop = [TaskType(ap) for ap in alloc_pop]
 		print(alloc_pop)
 		print(self.cal_makespan(pop, alloc_pop, show_result=True))
  
 	def run(self):
-		# best_list = []
-		# for _ in range(self.num_repeat):
+		best_list = []
 		self.cal_job_time()
 		self.init_pop()
 		for it in range(self.num_iter):
@@ -88,6 +92,7 @@ class GAJobSolver():
 			parent, rk_parent = self.selection()
 			offspring, rk_offspring, alloc_offspring = self.reproduction(parent, rk_parent)
 			self.replacement(offspring, rk_offspring, alloc_offspring)
+			best_list.append(self.Tbest_local/10)
 			self.progress_bar(it)
 		print("\n")
 		self.cal_makespan(self.pop_best, self.alloc_best, show_result=True)
@@ -500,15 +505,15 @@ class GAJobSolver():
 				agent_time[1] = end_time
     
 			if show_result:
-				# start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
-				start_time_delta = str(timedelta(seconds = int((end_time - process_time)*0.0036))) # convert seconds to hours, minutes and seconds
-				# end_time_delta = str(timedelta(seconds = end_time))
-				end_time_delta = str(timedelta(seconds = int(end_time*0.0036)))
+				start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
+				# start_time_delta = str(timedelta(seconds = int((end_time - process_time)*0.0036))) # convert seconds to hours, minutes and seconds
+				end_time_delta = str(timedelta(seconds = end_time))
+				# end_time_delta = str(timedelta(seconds = int(end_time*0.0036)))
 				gantt_dict.append(dict(
 					TaskType = f'{task_type.name}', 
-					Start = f'2024-06-23 {(str(start_time_delta))}', 
-					Finish = f'2024-06-23 {(str(end_time_delta))}',
-					Resource =f'JOB{job_id}({self.job_list[job_id].type})')
+					Start = f'2024-08-01 {(str(start_time_delta))}', 
+					Finish = f'2024-08-01 {(str(end_time_delta))}',
+					Resource =f'Task{job_id}({self.job_list[job_id].type})')
 					)
 				
 				for i, oht in enumerate(self.job_list[job_id].flat()):
