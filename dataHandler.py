@@ -14,6 +14,11 @@ class AgentType(Enum):
 	LH = 0
 	RH = 1
 	BOT = 2
+ 
+class TaskMode(Enum):
+	MANUAL = 0,
+	HRC = 1,
+	ROBOT = 2
 
 ## read position
 def read_POS(id) -> dict:
@@ -41,11 +46,11 @@ def read_BOTM(id):
 	botm_df = pd.read_csv(f"./data/{id}_bot_process_time.csv", index_col=0)
 	return botm_df
 
+## Read Allocation Limitation
 def read_AL(id):
 	al_df = pd.read_csv(f"./data/{id}_alloc_limit.csv")
 	Al = {}
 	for _, al in al_df.iterrows():
-		# Pos[pos["Name"]] = np.array([float(pos["x_coord"]), float(pos["y_coord"]),float(pos["z_coord"])])
 		Al[int(al["OHT"])] = int(al["OnlyFor"])
 	return Al
 
@@ -53,9 +58,3 @@ POS = read_POS(id)
 MTM = read_MTM()
 BOTM = read_BOTM(id)
 AL = read_AL(id)
-
-
-# while True:
-# 	tmp = input()
-# 	p1, p2 = tmp.split()
-# 	print(cal_dist(POS, p1, p2))

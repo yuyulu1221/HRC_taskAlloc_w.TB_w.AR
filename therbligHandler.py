@@ -298,7 +298,7 @@ class OHT:
                 break
         
             
-class JOB:
+class TASK:
     def __init__(self, ls:list):
         self.oht_list = ls
         self.type = "P&P"
@@ -319,7 +319,7 @@ class TBHandler(object):
         self.Pos = {}
         self.num_tbs = num_tbs
         self.id = id
-        self.job_list = []
+        self.task_list = []
         self.oht_list = []
     
     ## Save tbs by list
@@ -327,12 +327,12 @@ class TBHandler(object):
         for i in range(1, self.num_tbs+1):
             tbs_df = pd.read_excel(f"data/{self.id}_data.xlsx", sheet_name=f"Therbligs{i}")
             tmp = []
-            job = []
+            task = []
             for _, row in tbs_df.iterrows():
                 if row['Name'] == 'END':
                     oht = OHT(tmp.copy())
                     self.oht_list.append(oht)
-                    job.append(oht)
+                    task.append(oht)
                     tmp.clear() 
                     continue
                 
@@ -343,7 +343,7 @@ class TBHandler(object):
                     Type = row["Type"] if not pd.isna(row["To"]) else None, 
                 )
                 tmp.append(therblig)
-            self.job_list.append(JOB(job))
+            self.task_list.append(TASK(task))
             
         ## Use dummy node to represent "END" OHT   
         self.oht_list.append(OHT([]))                   

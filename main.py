@@ -1,24 +1,21 @@
-from GAScheduling_job import GAJobSolver
+from GAScheduling_task import GATaskSolver
 from GAScheduling_oht import *
 from therbligHandler import *
 import optuna
-import dataHandler
 
 procedure_id = "final"
 num_tbs = 7
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)
 tbh.run()
-# print(tbh.job_list)
 print(tbh.oht_list)
 
-# test
 def test_oht():
 	solver = GASolver(procedure_id, tbh.oht_list)
 	solver.test()
  
-def test_job():
-	solver = GAJobSolver(procedure_id, tbh.job_list, tbh.oht_list)
+def test_task():
+	solver = GATaskSolver(procedure_id, tbh.task_list, tbh.oht_list)
 	solver.test()
 
 def oht_simple_run():
@@ -47,24 +44,24 @@ def oht_optuna_run():
 	print('Values: ', study.best_trial.value)
 	print('para', study.best_trial.user_attrs)
  
-def job_simple_run():
-	solver = GAJobSolver(procedure_id, tbh.job_list, tbh.oht_list)
+def task_simple_run():
+	solver = GATaskSolver(procedure_id, tbh.task_list, tbh.oht_list)
 	solver.run()
  
-def job_optuna_run():
-	def GA_objective(trial, id, job_list, oht_list):
+def task_optuna_run():
+	def GA_objective(trial, id, task_list, oht_list):
 		param_grid = {
 			'pop_size': trial.suggest_int("pop_size", 100, 500, step=50),
 			'num_iter': trial.suggest_int("num_iter", 100, 500, step=50),
 			'crossover_rate': trial.suggest_float("crossover_rate", 0.6, 1),
 			'mutation_rate': trial.suggest_float("mutation_rate", 0.01, 0.025),
 		}
-		solver = GAJobSolver(id, job_list, oht_list, **param_grid)
+		solver = GATaskSolver(id, task_list, oht_list, **param_grid)
 		Tbest = solver.run()
 		return Tbest
 
 	study = optuna.create_study(directions=["minimize"])
-	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.job_list, tbh.oht_list), n_trials=160, n_jobs=4)
+	study.optimize(lambda trial: GA_objective(trial, procedure_id, tbh.task_list, tbh.oht_list), n_trials=160, n_jobs=4)
 
 	print('Trial Number: ', study.best_trial.number)
 	print('Parameters: ', study.best_trial.params)
@@ -76,21 +73,18 @@ while True:
 	cmd = input("Scheduling Type: ")
 	if cmd == 'oht':
 		oht_simple_run()
-	elif cmd == 'job':
-		job_simple_run()
+	elif cmd == 'task':
+		task_simple_run()
 	elif cmd == 'testoht':
 		test_oht()
-	elif cmd == 'testjob':
-		test_job()
+	elif cmd == 'testtask':
+		test_task()
+	## Optuna
 	elif cmd == 'optoht':
 		oht_optuna_run()
-	elif cmd == 'optjob':
-		job_optuna_run()
-	
-## Run Method
-# test()
-# oht_simple_run()
-# optuna_run()
-
-# job_simple_run()
-# job_optuna_run()
+	elif cmd == 'opttask':
+		task_optuna_run()
+	elif cmd == 'q':
+		break
+	else:
+		print('invalid cmd')
