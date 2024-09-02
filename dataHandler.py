@@ -9,16 +9,6 @@ class Vec3:
 		self.x = x
 		self.y = y
 		self.z = z
-  
-class AgentType(Enum):
-	LH = 0
-	RH = 1
-	BOT = 2
- 
-class TaskMode(Enum):
-	MANUAL = 0,
-	HRC = 1,
-	ROBOT = 2
 
 ## read position
 def read_POS(id) -> dict:

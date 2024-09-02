@@ -61,7 +61,8 @@ class GASolver():
 	def test(self):
 		pop = [9, 10, 7, 4, 3, 0, 1, 8, 12, 2, 6, 13, 11, 5]
 		alloc_pop = [0, 1, 0, 2, 1, 2, 1, 0, 0, 0, 1, 1, 1, 0]
-		print(self.cal_makespan(pop, alloc_pop, show_result=True))
+		alloc_pop = [AgentType(ap) for ap in alloc_pop]
+		# print(self.cal_makespan(pop, alloc_pop, show_result=True))
  
 	def run(self):
 		self.init_pop()
@@ -94,27 +95,27 @@ class GASolver():
    
 	def apply_alloc_limit(self, alloc_pop):
 		for oht_id in dh.AL:
-			alloc_pop[oht_id] = dh.AL[oht_id]
+			alloc_pop[oht_id] = AgentType(dh.AL[oht_id])
  
-	def decide_agent(self, key) -> int:
+	def decide_agent(self, rkey) -> int:
 		"""
   		Decide agent by random key
 		
 		Args:
 			key (list): Random key for each oht
 		Returns:
-			int: Agent id
+			AgentType
 		"""
-		if key[0] == key[1] and key[0] == key[2]:
-			return np.random.randint(0, 3)
-		elif key[0] == key[1] and key[0] > key[2]:
-			return np.random.randint(0, 2)
-		elif key[1] == key[2] and key[1] > key[0]:
-			return np.random.randint(1, 3)
-		elif key[0] == key[2] and key[2] > key[1]:
-			return np.random.choice([0, 2])
+		if rkey[0] == rkey[1] and rkey[0] == rkey[2]:
+			return np.random.choice((AgentType.LH, AgentType.RH, AgentType.BOT))
+		elif rkey[0] == rkey[1] and rkey[0] > rkey[2]:
+			return np.random.choice((AgentType.LH, AgentType.RH))
+		elif rkey[1] == rkey[2] and rkey[1] > rkey[0]:
+			return np.random.choice((AgentType.RH, AgentType.BOT))
+		elif rkey[0] == rkey[2] and rkey[2] > rkey[1]:
+			return np.random.choice((AgentType.LH, AgentType.BOT))
 		else:
-			return np.argmax(key)
+			return AgentType(np.argmax(rkey))
    
 	def selection(self) -> tuple[list, list]:
 		"""
@@ -323,7 +324,7 @@ class GASolver():
 		if n+1 == self.num_iter:
 			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {self.alloc_best[:-1]}")
 		else:
-			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {self.alloc_best[:-1]}", end="")
+			print(f"\rProgress: [{bar}] {((n+1)/self.num_iter):.2%} {n+1}/{self.num_iter}, T-best: {self.Tbest}, Alloc: {[a.name for a in self.alloc_best[:-1]]}", end="")
 
 	def draw_gantt_chart(self, gantt_dict:dict):
 		gantt_df = pd.DataFrame(gantt_dict)
@@ -378,10 +379,10 @@ class GASolver():
 		timestamps = [[], [], []]
 
 		for oht_id in pop:
-			ag_id = alloc_pop[oht_id]
+			ag:AgentType = alloc_pop[oht_id]
 			oht:OHT = self.oht_list[oht_id]
-			process_time = int(oht.get_oht_time(cur_pos[ag_id], ag_id))
-			remain_time = oht.get_bind_remain_time(cur_pos[ag_id], ag_id)
+			process_time = int(oht.get_oht_time(cur_pos[ag.value], ag))
+			remain_time = oht.get_bind_remain_time(cur_pos[ag.value], ag)
 
 			if bind_is_scheduled:
 				end_time = bind_end_time
@@ -390,63 +391,63 @@ class GASolver():
 			## For scheduling first binded OHT 
 			elif oht.bind != None:
 				## Revise alloc in binded task
-				bind_ag_id = alloc_pop[oht.bind.id]
+				bind_ag = alloc_pop[oht.bind.id]
 				## Find the end time of current OHT
 				seq_time = 0
 				if oht.prev:
 					seq_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-				start_time = max(ag_time[ag_id], seq_time)
-				start_time = self.revise_start_time(ag_id, timestamps, start_time, oht.repr_pos)
+				start_time = max(ag_time[ag.value], seq_time)
+				start_time = self.revise_start_time(ag, timestamps, start_time, oht.repr_pos)
 				end_time = start_time + process_time
 				
 				## Find the end time of bind OHT
-				bind_process_time = int(oht.bind.get_oht_time(cur_pos[bind_ag_id], bind_ag_id))
-				bind_remain_time = oht.bind.get_bind_remain_time(cur_pos[bind_ag_id], bind_ag_id)
+				bind_process_time = int(oht.bind.get_oht_time(cur_pos[bind_ag.value], bind_ag))
+				bind_remain_time = oht.bind.get_bind_remain_time(cur_pos[bind_ag.value], bind_ag)
 				bind_seq_time = 0
 				if oht.bind.prev:
 					bind_seq_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
-				bind_start_time = max(ag_time[bind_ag_id], bind_seq_time)
-				bind_start_time = self.revise_start_time(bind_ag_id, timestamps, bind_start_time, oht.repr_pos)
-				bind_end_time = max(ag_time[bind_ag_id], bind_start_time) + bind_process_time
+				bind_start_time = max(ag_time[bind_ag.value], bind_seq_time)
+				bind_start_time = self.revise_start_time(bind_ag, timestamps, bind_start_time, oht.repr_pos)
+				bind_end_time = max(ag_time[bind_ag.value], bind_start_time) + bind_process_time
 
 				bind_is_scheduled = True
 
 				## Add punishment when using same agent at same time
 				same_agent_PUN = 0
-				if ag_id == bind_ag_id:
+				if ag == bind_ag:
 					same_agent_PUN = self.PUN_val
 
 				bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time + same_agent_PUN
 				end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time + same_agent_PUN
 
 				start_time = end_time - process_time
-				timestamps[ag_id].extend(oht.get_timestamp(AGENT[ag_id], ag_id))
-				oht.renew_agent_pos(cur_pos, ag_id)
+				timestamps[ag.value].extend(oht.get_timestamp(ag.name, ag))
+				oht.renew_agent_pos(cur_pos, ag)
 
 				bind_start_time = bind_end_time - bind_process_time
-				timestamps[bind_ag_id].extend(oht.bind.get_timestamp(AGENT[bind_ag_id], bind_ag_id))
-				oht.bind.renew_agent_pos(cur_pos, bind_ag_id)
+				timestamps[bind_ag.value].extend(oht.bind.get_timestamp(bind_ag.name, bind_ag))
+				oht.bind.renew_agent_pos(cur_pos, bind_ag)
 
 			## Normal OHT with previous OHT
 			elif oht.prev:
 				seq_time = 0    
 				seq_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-				start_time = max(ag_time[ag_id], seq_time)
-				start_time = self.revise_start_time(ag_id, timestamps, start_time, oht.repr_pos)
+				start_time = max(ag_time[ag.value], seq_time)
+				start_time = self.revise_start_time(ag, timestamps, start_time, oht.repr_pos)
 				end_time = start_time + process_time
 
-				timestamps[ag_id].extend(oht.get_timestamp(AGENT[ag_id], ag_id))
-				oht.renew_agent_pos(cur_pos, ag_id)
+				timestamps[ag.value].extend(oht.get_timestamp(ag.name, ag))
+				oht.renew_agent_pos(cur_pos, ag)
 
 			## Normal OHT without previous OHT
 			else:
-				start_time = ag_time[ag_id]
-				start_time = self.revise_start_time(ag_id, timestamps, start_time, oht.repr_pos)
+				start_time = ag_time[ag.value]
+				start_time = self.revise_start_time(ag, timestamps, start_time, oht.repr_pos)
 				end_time = start_time + process_time
-				timestamps[ag_id].extend(oht.get_timestamp(AGENT[ag_id], ag_id))
-				oht.renew_agent_pos(cur_pos, ag_id)
+				timestamps[ag.value].extend(oht.get_timestamp(ag.name, ag))
+				oht.renew_agent_pos(cur_pos, ag)
 
-			ag_time[ag_id] = end_time
+			ag_time[ag.value] = end_time
 			oht_end_time[oht_id] = end_time
    
 			if show_result:
@@ -455,14 +456,14 @@ class GASolver():
 	
 				## Data for Gantt chart
 				gantt_dict.append(dict(
-					Agent = f'{AGENT[ag_id]}', 
+					Agent = f'{ag.name}', 
 					Start = f'2024-08-01 {str(start_time_delta)}', 
 					Finish = f'2024-08-01 {str(end_time_delta)}',
 					Resource =f'OHT{oht_id}({self.oht_list[oht_id].type})')
 				)
 				
 				## Data for AR system			
-				order_list[ag_id].append(dict(Order = oht.id))
+				order_list[ag.value].append(dict(Order = oht.id))
 
 		makespan = max(ag_time)
   
@@ -472,16 +473,16 @@ class GASolver():
 			print(f"Makespan: ", makespan)
 			for a, ord in enumerate(order_list):
 				order_df = pd.DataFrame(ord)
-				order_df.to_csv(f"./data/{self.procedure_id}_OHT_result_{AGENT[a]}.csv" ,index=False)
+				order_df.to_csv(f"./data/{self.procedure_id}_OHT_result_{AgentType(a).name}.csv" ,index=False)
 			self.draw_gantt_chart(gantt_dict)
 		return makespan
 
-	def revise_start_time(self, ag_id, timestamps, start_time, pos) -> int:
+	def revise_start_time(self, ag, timestamps, start_time, pos) -> int:
 		if pos == "":
 			return start_time
 
 		## 使用左手時，判斷下一個右手在右邊、機械手臂在前方的時間點
-		if ag_id == 0:
+		if ag == AgentType.LH:
 			for ts in timestamps[1]:
 				if start_time < ts.time and dh.POS[pos].x > dh.POS[ts.pos].x:
 					start_time = ts.time
@@ -489,7 +490,7 @@ class GASolver():
 				if start_time < ts.time and dh.POS[pos].z > dh.POS[ts.pos].z:
 					start_time = ts.time
 		## 使用右手時，判斷下一個左手在左邊、機械手臂在前方的時間點
-		if ag_id == 1:
+		if ag == AgentType.RH:
 			for ts in timestamps[0]:
 				if start_time < ts.time and dh.POS[pos].x < dh.POS[ts.pos].x:
 					start_time = ts.time
@@ -497,7 +498,7 @@ class GASolver():
 				if start_time < ts.time and dh.POS[pos].z > dh.POS[ts.pos].z:
 					start_time = ts.time
 		## 使用機械手臂時，判斷下一個左手及右手都在後方的時間點
-		if ag_id == 2:
+		if ag == AgentType.BOT:
 			for ts in timestamps[0]:
 				if start_time < ts.time and dh.POS[pos].z < dh.POS[ts.pos].z:
 					start_time = ts.time
