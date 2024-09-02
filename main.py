@@ -8,7 +8,8 @@ num_tbs = 7
 
 tbh = TBHandler(num_tbs=num_tbs, id=procedure_id)
 tbh.run()
-print(tbh.oht_list)
+for i, oht in enumerate(tbh.oht_list):
+	print(f'OHT{i}\t: {oht}')
 
 def test_oht():
 	solver = GASolver(procedure_id, tbh.oht_list)

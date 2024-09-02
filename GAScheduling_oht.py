@@ -469,7 +469,7 @@ class GASolver():
   
 		if show_result:
 			print(f"Best OHT sequence: \n-----\t", pop)
-			print(f"Best choice of agent: \n-----\t", alloc_pop)
+			print(f"Best choice of agent: \n-----\t", [a.name for a in alloc_pop])
 			print(f"Makespan: ", makespan)
 			for a, ord in enumerate(order_list):
 				order_df = pd.DataFrame(ord)
@@ -483,26 +483,26 @@ class GASolver():
 
 		## 使用左手時，判斷下一個右手在右邊、機械手臂在前方的時間點
 		if ag == AgentType.LH:
-			for ts in timestamps[1]:
+			for ts in timestamps[AgentType.RH.value]:
 				if start_time < ts.time and dh.POS[pos].x > dh.POS[ts.pos].x:
 					start_time = ts.time
-			for ts in timestamps[2]:
+			for ts in timestamps[AgentType.BOT.value]:
 				if start_time < ts.time and dh.POS[pos].z > dh.POS[ts.pos].z:
 					start_time = ts.time
 		## 使用右手時，判斷下一個左手在左邊、機械手臂在前方的時間點
 		if ag == AgentType.RH:
-			for ts in timestamps[0]:
+			for ts in timestamps[AgentType.LH.value]:
 				if start_time < ts.time and dh.POS[pos].x < dh.POS[ts.pos].x:
 					start_time = ts.time
-			for ts in timestamps[2]:
+			for ts in timestamps[AgentType.BOT.value]:
 				if start_time < ts.time and dh.POS[pos].z > dh.POS[ts.pos].z:
 					start_time = ts.time
 		## 使用機械手臂時，判斷下一個左手及右手都在後方的時間點
 		if ag == AgentType.BOT:
-			for ts in timestamps[0]:
+			for ts in timestamps[AgentType.LH.value]:
 				if start_time < ts.time and dh.POS[pos].z < dh.POS[ts.pos].z:
 					start_time = ts.time
-			for ts in timestamps[1]:
+			for ts in timestamps[AgentType.RH.value]:
 				if start_time < ts.time and dh.POS[pos].z < dh.POS[ts.pos].z:
 					start_time = ts.time
 		return start_time

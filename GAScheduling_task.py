@@ -15,6 +15,11 @@ class TaskMode(Enum):
 	MANUAL = 0
 	HRC = 1
 	ROBOT = 2
+
+class AgentType(Enum):
+	LH = 0
+	RH = 1
+	BOT = 2
 #%% read OHT relation
 def read_OHT_relation(oht_list, id):
 	ohtr_df = pd.read_csv(f"./data/{id}_oht_relation.csv", index_col=0)
@@ -128,22 +133,21 @@ class GATaskSolver():
 				if cnt >= total:
 					alloc_combin.append(alloc)
 					return
-				for i in range(self.num_task_mode):
+				for i in range(len(AgentType)):
 					tmp = alloc.copy()
-					tmp.append(i)
+					tmp.append(AgentType(i))
 					find_combination(cnt+1, total, tmp)
 			find_combination(0, num_oht, [])
    
 			## Classify allocate combination by task mode
 			for alloc in alloc_combin:
-				if 2 not in alloc:
+				if AgentType.BOT not in alloc:
 					local_alloc_list[TaskMode.MANUAL.value].append(tuple(alloc))
+				elif AgentType.LH in alloc or AgentType.RH in alloc:
 
-				elif 0 in alloc or 1 in alloc:
 					local_alloc_list[TaskMode.HRC.value].append(tuple(alloc))
-
 				else:
-					local_alloc_list[TaskMode.ROBOT.value].append(tuple(alloc))			
+					local_alloc_list[TaskMode.ROBOT.value].append(tuple(alloc))	
    
 			for task_type in TaskMode:
 				min_task_time = 9999999
@@ -161,14 +165,14 @@ class GATaskSolver():
 						if len(ag_alloc) == 0:
 							end_time = self.PUN_val
 							break
-						ag_id = ag_alloc[local_oht_id] 
+						ag = ag_alloc[local_oht_id] 
 						if oht_id in dh.AL:
-							if ag_id != dh.AL[oht_id]:
+							if ag != AgentType(dh.AL[oht_id]):
 								end_time = self.PUN_val
 								break
-						ag_pos = cur_pos[ag_id]
-						process_time = int(oht.get_oht_time(ag_pos, ag_id))
-						remain_time = oht.get_bind_remain_time(ag_pos, ag_id)
+						ag_pos = cur_pos[ag.value]
+						process_time = int(oht.get_oht_time(ag_pos, ag))
+						remain_time = oht.get_bind_remain_time(ag_pos, ag)
 
 						if bind_is_scheduled:
 							end_time = bind_end_time
@@ -184,22 +188,22 @@ class GATaskSolver():
 								task_time = 0
 								if oht.prev:
 									task_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-								end_time = max(ag_time[ag_id], task_time) + process_time
+								end_time = max(ag_time[ag.value], task_time) + process_time
 								
 								## Find the end time of bind OHT
-								bind_ag_id = ag_alloc[local_oht_id+1]
+								bind_ag = ag_alloc[local_oht_id+1]
 
-								if ag_id == bind_ag_id:
+								if ag == bind_ag:
 									bind_end_time = self.PUN_val
 									end_time = self.PUN_val
 								else:
-									bind_ag_pos = AGENT[bind_ag_id]
-									bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag_id))
-									bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag_id)
+									bind_ag_pos = bind_ag.name
+									bind_process_time = int(oht.bind.get_oht_time(bind_ag_pos, bind_ag))
+									bind_remain_time = oht.bind.get_bind_remain_time(bind_ag_pos, bind_ag)
 									bind_task_time = 0
 									if oht.bind.prev:
 										bind_task_time = max(oht_end_time[bind_oht_prev.id] for bind_oht_prev in oht.bind.prev)
-									bind_end_time = max(ag_time[bind_ag_id], bind_task_time) + bind_process_time
+									bind_end_time = max(ag_time[bind_ag.value], bind_task_time) + bind_process_time
 
 									bind_end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + bind_remain_time
 									end_time = max(end_time - remain_time, bind_end_time - bind_remain_time) + remain_time
@@ -207,15 +211,15 @@ class GATaskSolver():
 						## Normal OHT with previous OHT
 						elif oht.prev:
 							task_time = max(oht_end_time[oht_prev.id] for oht_prev in oht.prev)
-							start_time = max(ag_time[ag_id], task_time)
+							start_time = max(ag_time[ag.value], task_time)
 							end_time = start_time + process_time
 						else:
-							start_time = ag_time[ag_id]
+							start_time = ag_time[ag.value]
 							end_time = start_time + process_time
 
-						ag_time[ag_id] = end_time
+						ag_time[ag.value] = end_time
 						oht_end_time[oht_id] = end_time
-						oht.renew_agent_pos(cur_pos, ag_id)
+						oht.renew_agent_pos(cur_pos, ag)
 
 					if end_time < min_task_time:
 						min_task_time = end_time
@@ -223,6 +227,8 @@ class GATaskSolver():
 
 				self.task_time[task_id][task_type.value] = min_task_time
 				self.task_oht_alloc[task_id][task_type.value] = min_task_oht_alloc
+		print(self.task_time)
+		print([[[a.name for a in tp] for tp in lis] for lis in self.task_oht_alloc])
 
 	def init_pop(self) -> None:
 		self.Tbest = 999999999
@@ -479,17 +485,15 @@ class GATaskSolver():
 		order_list = [[] for _ in range(3)] 
 
 		## Record end time of each OHT
-		oht_end_time = [0 for _ in range(self.num_task)]
 		for task_id in pop:
-			task_type:TaskMode = alloc_pop[task_id]
-			# task:TASK = self.task_list[task_id]
-			process_time = self.task_time[task_id][task_type.value]
+			mode:TaskMode = alloc_pop[task_id]
+			process_time = self.task_time[task_id][mode.value]
 
-			if task_type == TaskMode.MANUAL:
+			if mode == TaskMode.MANUAL:
 				agent_time[0] += process_time
 				end_time = agent_time[0]
 
-			elif task_type == TaskMode.ROBOT:
+			elif mode == TaskMode.ROBOT:
 				agent_time[1] += process_time
 				end_time = agent_time[1]
     
@@ -503,18 +507,18 @@ class GATaskSolver():
 				start_time_delta = str(timedelta(seconds = end_time - process_time)) # convert seconds to hours, minutes and seconds
 				end_time_delta = str(timedelta(seconds = end_time))
 				gantt_dict.append(dict(
-					TaskMode = f'{task_type.name}', 
+					TaskMode = f'{mode.name}', 
 					Start = f'2024-08-01 {(str(start_time_delta))}', 
 					Finish = f'2024-08-01 {(str(end_time_delta))}',
 					Resource =f'Task{task_id}({self.task_list[task_id].type})')
 				)
 				for i, oht in enumerate(self.task_list[task_id].flat()):
-					ag_id = self.task_oht_alloc[task_id][task_type.value][i]
-					order_list[ag_id].append(dict(Order = oht.id))
+					ag = self.task_oht_alloc[task_id][mode.value][i]
+					order_list[ag.value].append(dict(Order = oht.id))
 		if show_result:
 			for a, ord in enumerate(order_list):
 				order_df = pd.DataFrame(ord)
-				order_df.to_csv(f"./data/{self.procedure_id}_TASK_result_{AGENT[a]}.csv" ,index=False)
+				order_df.to_csv(f"./data/{self.procedure_id}_TASK_result_{AgentType(a).name}.csv" ,index=False)
 			self.draw_gantt_chart(gantt_dict, task_id)
 		makespan = max(agent_time)
 		return makespan
