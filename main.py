@@ -85,7 +85,18 @@ while True:
 		oht_optuna_run()
 	elif cmd == 'opttask':
 		task_optuna_run()
-	elif cmd == 'q':
+	elif cmd == 'bye':
+		print('Bye~')
 		break
+	elif cmd == '--help' or cmd == '-h':
+		print('Commands:\n\
+	- oht: oht model\n\
+	- task: traditional model\n\
+	- testoht: test for one-handed task model\n\
+	- testtask: test for traditional model\n\
+	- optoht: Optuna module for hyperparameter optimization of the oht model\n\
+	- opttask: Optuna module for hyperparameter optimization of the traditional model\n\
+	- bye: exit the program\n\
+      ')
 	else:
-		print('invalid cmd')
+		print('Invalid cmd. Type in "-h" for help.')

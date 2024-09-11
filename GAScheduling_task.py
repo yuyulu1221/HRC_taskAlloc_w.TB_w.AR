@@ -68,7 +68,7 @@ class GATaskSolver():
 	def test(self):
 		self.cal_task_time()
   
-		## 從這裡改測試結果
+		## Modify the test results from here
 		pop = [1, 4, 5, 0, 6, 3, 2]
 		alloc_pop = [0, 1, 2, 0, 0, 0, 0]
 		## ---
@@ -518,7 +518,7 @@ class GATaskSolver():
 		if show_result:
 			for a, ord in enumerate(order_list):
 				order_df = pd.DataFrame(ord)
-				order_df.to_csv(f"./data/{self.procedure_id}_TASK_result_{AgentType(a).name}.csv" ,index=False)
+				order_df.to_csv(f"./result/{self.procedure_id}_TASK_result_{AgentType(a).name}.csv" ,index=False)
 			self.draw_gantt_chart(gantt_dict, task_id)
 		makespan = max(agent_time)
 		return makespan

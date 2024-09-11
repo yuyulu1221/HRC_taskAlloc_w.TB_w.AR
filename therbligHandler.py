@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import dataHandler as dh
 
+## Check if the therblig name exists
 tb_abbr = {
     "R": "Reach",
     "M": "Move",
@@ -30,11 +31,9 @@ class Therblig:
         if tb_abbr.get(Name) == None:
             raise ValueError(f"This type of therblig is not exist: {Name}")
         self.name = Name
-        self.start: float
-        self.end: float
         self.From = From
         self.To = To
-        self.type = Type # difficulty
+        self.type = Type ## difficulty
         self.time = self.cal_tb_time()
         
     def __repr__(self):
@@ -111,16 +110,15 @@ class OHT:
         self.prev:list = []
         self.bind:OHT = None
         self.bind_time:int = 0
-        self.end_time:int = 0
+        # self.end_time:int = 0
         self.To: str
         self.repr_pos:str = self.tb_list[0].To if len(self.tb_list) else ""
         self.type:str = self.decide_type()
         self.time = self.cal_oht_time()
-        self.prev_connect_time, self.next_connect_time = self.get_connect_time()
+        # self.prev_connect_time, self.next_connect_time = self.get_connect_time()
             
     def __repr__(self):
         return "(" + ", ".join(map(str, self.tb_list)) + ")"
-        # return f"OHT{self.id}"
     
     def decide_type(self) -> str:
         for tb in self.tb_list:
@@ -137,25 +135,26 @@ class OHT:
                 ptime[ag.value] += tb.get_tb_time(ag.name, ag)
         return ptime
     
-    def get_connect_time(self):
-        prev_connect_time = [0, 0, 0]
-        next_connect_time = [0, 0, 0]
-        for ag in AgentType:
-            cur_total = 0
-            for i, tb in enumerate(self.tb_list):
-                cur_total += tb.get_tb_time(ag.name, ag)
-                if tb.name == 'G':
-                    prev_connect_time[ag.value] = cur_total
-            cur_total = 0
-            for i, tb in enumerate(self.tb_list[::-1]):
-                if tb.name == 'A' and self.tb_list[i+1].name == 'RL':
-                    next_connect_time[ag.value] = cur_total
-                    break
-                if tb.name == 'RL'and self.tb_list[i-1].name != 'A':
-                    next_connect_time[ag.value] = cur_total
-                    break
-                cur_total += tb.get_tb_time(ag.name, ag)
-        return prev_connect_time, next_connect_time
+    ## Try to address the issue of the path difference between the human and the robotic arm
+    # def get_connect_time(self):
+    #     prev_connect_time = [0, 0, 0]
+    #     next_connect_time = [0, 0, 0]
+    #     for ag in AgentType:
+    #         cur_total = 0
+    #         for i, tb in enumerate(self.tb_list):
+    #             cur_total += tb.get_tb_time(ag.name, ag)
+    #             if tb.name == 'G':
+    #                 prev_connect_time[ag.value] = cur_total
+    #         cur_total = 0
+    #         for i, tb in enumerate(self.tb_list[::-1]):
+    #             if tb.name == 'A' and self.tb_list[i+1].name == 'RL':
+    #                 next_connect_time[ag.value] = cur_total
+    #                 break
+    #             if tb.name == 'RL'and self.tb_list[i-1].name != 'A':
+    #                 next_connect_time[ag.value] = cur_total
+    #                 break
+    #             cur_total += tb.get_tb_time(ag.name, ag)
+    #     return prev_connect_time, next_connect_time
                     
     
     def get_oht_time(self, ag_pos, ag):
@@ -200,9 +199,9 @@ class OHT:
     def renew_agent_pos(self, ag_pos_d, ag_id):
         if ag_id != 2:
             return
-        # ## find the last movable therblig and change
+        # ## Find the last movable therblig
         for tb in self.tb_list[-2::-1]:
-            if tb.name in ['R', 'M']:
+            if tb.is_moving_tb():
                 ag_pos_d[ag_id] = tb.To
                 break
         
@@ -267,9 +266,11 @@ class TBHandler(object):
             pm.extend(oht.get_process_method(ag))
             
         pm_df = pd.DataFrame(pm)
-        pm_df.to_csv(f"./data/{self.id}_process_method_{ag.name}.csv" ,index=False)
+        pm_df.to_csv(f"./result/{self.id}_process_method_{ag.name}.csv" ,index=False)
      
     def run(self):
         self.save_tbs()
         self.set_oht_id()
-        self.write_process_method(AgentType(2))
+        
+        ## Output only the method of the robotic arm
+        self.write_process_method(AgentType.BOT)

@@ -1,4 +1,4 @@
-#%% importing required modules
+#%% importing required modules, classes, and functions
 from math import inf
 from enum import Enum
 import pandas as pd
@@ -14,10 +14,9 @@ class AgentType(Enum):
 	LH = 0
 	RH = 1
 	BOT = 2
-#%% read OHT relation
+ 
 def read_OHT_relation(oht_list, id):
 	ohtr_df = pd.read_csv(f"./data/{id}_oht_relation.csv", index_col=0)
- 
 	for row_id in range(ohtr_df.shape[0]):
 		for col_id in range(ohtr_df.shape[1]):
 			if ohtr_df.iloc[row_id, col_id] == -1:
@@ -62,7 +61,6 @@ class GASolver():
 		pop = [9, 10, 7, 4, 3, 0, 1, 8, 12, 2, 6, 13, 11, 5]
 		alloc_pop = [0, 1, 0, 2, 1, 2, 1, 0, 0, 0, 1, 1, 1, 0]
 		alloc_pop = [AgentType(ap) for ap in alloc_pop]
-		# print(self.cal_makespan(pop, alloc_pop, show_result=True))
  
 	def run(self):
 		self.init_pop()
@@ -256,34 +254,26 @@ class GASolver():
 				return find_prev_oht(oht.bind)
    
 		for id in oht_seq:
-
 			## Replace current id with unused id
 			while swap.get(id):
 				id = swap.pop(id)
-
 			## Skip it if the oht is scheduled
 			if is_scheduled[id] == True:
 				continue
-			
-			## To avoid repeated searches '''
+			## To avoid repeated searches
 			is_searched = [False for _ in range(self.num_oht)]
-
 			## Find oht which has no previous task
 			todo_id = find_prev_oht(oht_list[id])
-			
 			## Add oht id to output
 			output.append(todo_id)
 			is_scheduled[todo_id] = True
-   
 			## Add bind oht id to output if it exists
 			if oht_list[todo_id].bind != None:
 				output.append(oht_list[todo_id].bind.id)
 				is_scheduled[oht_list[todo_id].bind.id] = True
-
 			## Record the unused id
 			if todo_id != id:
 				swap[todo_id] = id
- 
 		return output	
 
 	def replacement(self, offspring, rk_offspring, alloc_offspring) -> None:
@@ -344,7 +334,6 @@ class GASolver():
 		)
 		fig.update_layout(font=dict(size=36))
 		fig.show()
-		# fig.write_image(f'chart/{self.procedure_id}_gantt_chart.png')
   
 	def draw_run_chart(self, best_list:list):
 		iterations = [it+1 for it in range(self.num_iter)]
@@ -352,7 +341,7 @@ class GASolver():
 		plt.title('Run Chart')
 		plt.xlabel('iterations')
 		plt.ylabel('fitness')
-		plt.grid(axis='y', linestyle='--')  # 添加網格線
+		plt.grid(axis='y', linestyle='--')
 		plt.savefig(f'chart/{self.procedure_id}_OHT_run_chart')
 		# plt.show()
  
@@ -473,7 +462,7 @@ class GASolver():
 			print(f"Makespan: ", makespan)
 			for a, ord in enumerate(order_list):
 				order_df = pd.DataFrame(ord)
-				order_df.to_csv(f"./data/{self.procedure_id}_OHT_result_{AgentType(a).name}.csv" ,index=False)
+				order_df.to_csv(f"./result/{self.procedure_id}_OHT_result_{AgentType(a).name}.csv" ,index=False)
 			self.draw_gantt_chart(gantt_dict)
 		return makespan
 
@@ -481,7 +470,7 @@ class GASolver():
 		if pos == "":
 			return start_time
 
-		## 使用左手時，判斷下一個右手在右邊、機械手臂在前方的時間點
+		## When using the left hand, determine the moment when the next right hand is on the right side, and the robotic arm is in front.
 		if ag == AgentType.LH:
 			for ts in timestamps[AgentType.RH.value]:
 				if start_time < ts.time and dh.POS[pos].x > dh.POS[ts.pos].x:
@@ -489,7 +478,7 @@ class GASolver():
 			for ts in timestamps[AgentType.BOT.value]:
 				if start_time < ts.time and dh.POS[pos].z > dh.POS[ts.pos].z:
 					start_time = ts.time
-		## 使用右手時，判斷下一個左手在左邊、機械手臂在前方的時間點
+		## When using the right hand, determine the moment when the next left hand is on the left side, and the robotic arm is in front.
 		if ag == AgentType.RH:
 			for ts in timestamps[AgentType.LH.value]:
 				if start_time < ts.time and dh.POS[pos].x < dh.POS[ts.pos].x:
@@ -497,7 +486,7 @@ class GASolver():
 			for ts in timestamps[AgentType.BOT.value]:
 				if start_time < ts.time and dh.POS[pos].z > dh.POS[ts.pos].z:
 					start_time = ts.time
-		## 使用機械手臂時，判斷下一個左手及右手都在後方的時間點
+		## When using the robotic arm, determine the moment when both the left hand and right hand are behind.
 		if ag == AgentType.BOT:
 			for ts in timestamps[AgentType.LH.value]:
 				if start_time < ts.time and dh.POS[pos].z < dh.POS[ts.pos].z:
